@@ -46,4 +46,16 @@ class PromotionService {
       rethrow;
     }
   }
+
+  // Récupérer les promotions/vidéos pour l'utilisateur connecté
+  Future<List<Promotion>> getUserPromotions() async {
+    try {
+      final response = await _apiService.get('/promotions/utilisateur/videos');
+
+      final List<dynamic> data = response.data;
+      return data.map((json) => Promotion.fromJson(json)).toList();
+    } catch (e) {
+      rethrow;
+    }
+  }
 }

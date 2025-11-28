@@ -5,6 +5,7 @@ import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'api_service.dart';
 import '../models/user.dart';
 import '../utils/constants.dart';
+import '../utils/exceptions.dart';
 
 class AuthService with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -66,8 +67,8 @@ class AuthService with ChangeNotifier {
       final response = await _apiService.post(
         AppConstants.loginEndpoint,
         data: {
-          'identifier': email, // Backend attend 'identifier'
-          'password': password, // Backend attend 'password'
+          'email': email,
+          'mot_de_passe': password,
         },
       );
 
@@ -169,6 +170,10 @@ class AuthService with ChangeNotifier {
     }
 
     notifyListeners();
+
+    if (!isProfileComplete) {
+      throw IncompleteProfileException();
+    }
   }
 
   // Complétion de profil
