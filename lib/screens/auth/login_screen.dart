@@ -8,6 +8,8 @@ import '../../widgets/custom_text_field.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../widgets/social_login_buttons.dart';
 import 'register_screen.dart';
+import 'complete_social_profile_screen.dart';
+import '../../utils/exceptions.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -131,8 +133,46 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 20),
 
                   SocialLoginButtons(
-                    onFacebookTap: () => authService.loginWithFacebook(),
-                    onGoogleTap: () => authService.loginWithGoogle(),
+                    onFacebookTap: () async {
+                      try {
+                        await authService.loginWithFacebook();
+                      } on IncompleteProfileException {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const CompleteSocialProfileScreen(),
+                          ),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Erreur connexion: ${e.toString()}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                    onGoogleTap: () async {
+                      try {
+                        await authService.loginWithGoogle();
+                      } on IncompleteProfileException {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const CompleteSocialProfileScreen(),
+                          ),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Erreur connexion: ${e.toString()}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
                   ),
 
                   const SizedBox(height: 40),
