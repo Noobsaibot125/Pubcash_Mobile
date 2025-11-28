@@ -66,18 +66,18 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: AppColors.text,
+                color: AppColors.textDark,
               ),
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined, color: AppColors.text),
+            icon: const Icon(Icons.notifications_outlined, color: AppColors.textDark),
             onPressed: () { /* TODO: Notification screen */ },
           ),
           const SizedBox(width: 8),
-        
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async => _refreshData(),
@@ -164,7 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
       style: const TextStyle(
         fontSize: 20,
         fontWeight: FontWeight.bold,
-        color: AppColors.text,
+        color: AppColors.textDark,
       ),
     );
   }
