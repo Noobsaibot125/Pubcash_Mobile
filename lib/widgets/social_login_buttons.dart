@@ -6,10 +6,10 @@ class SocialLoginButtons extends StatelessWidget {
   final VoidCallback onGoogleTap;
 
   const SocialLoginButtons({
-    Key? key,
+    super.key,
     required this.onFacebookTap,
     required this.onGoogleTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

@@ -4,7 +4,7 @@ import '../services/auth_service.dart'; // Assure-toi d'avoir une méthode updat
 
 class EditProfileModal extends StatefulWidget {
   final Map<String, dynamic> userData;
-  const EditProfileModal({Key? key, required this.userData}) : super(key: key);
+  const EditProfileModal({super.key, required this.userData});
 
   @override
   State<EditProfileModal> createState() => _EditProfileModalState();

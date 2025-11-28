@@ -7,7 +7,7 @@ class PuzzleGame extends StatefulWidget {
   final dynamic game; // Les infos du jeu (image, id, etc.)
   final VoidCallback onFinish;
 
-  const PuzzleGame({Key? key, required this.game, required this.onFinish}) : super(key: key);
+  const PuzzleGame({super.key, required this.game, required this.onFinish});
 
   @override
   State<PuzzleGame> createState() => _PuzzleGameState();

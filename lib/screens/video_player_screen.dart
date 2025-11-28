@@ -12,10 +12,10 @@ class FullScreenVideoScreen extends StatefulWidget {
   final Function onVideoViewed;
 
   const FullScreenVideoScreen({
-    Key? key,
+    super.key,
     required this.promotion,
     required this.onVideoViewed,
-  }) : super(key: key);
+  });
 
   @override
   State<FullScreenVideoScreen> createState() => _FullScreenVideoScreenState();

@@ -11,7 +11,7 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/loading_overlay.dart';
 
 class CompleteProfileScreen extends StatefulWidget {
-  const CompleteProfileScreen({Key? key}) : super(key: key);
+  const CompleteProfileScreen({super.key});
 
   @override
   State<CompleteProfileScreen> createState() => _CompleteProfileScreenState();

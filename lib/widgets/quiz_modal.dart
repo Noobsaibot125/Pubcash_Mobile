@@ -9,10 +9,10 @@ class QuizModal extends StatefulWidget {
   final VoidCallback onCompleted;
 
   const QuizModal({
-    Key? key,
+    super.key,
     required this.promotion,
     required this.onCompleted,
-  }) : super(key: key);
+  });
 
   @override
   State<QuizModal> createState() => _QuizModalState();
@@ -238,7 +238,7 @@ class _QuizModalState extends State<QuizModal> {
                 ),
               ),
             );
-          }).toList(),
+          }),
 
           const SizedBox(height: 24),
 

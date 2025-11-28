@@ -11,7 +11,7 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/loading_overlay.dart';
 
 class CompleteSocialProfileScreen extends StatefulWidget {
-  const CompleteSocialProfileScreen({Key? key}) : super(key: key);
+  const CompleteSocialProfileScreen({super.key});
 
   @override
   State<CompleteSocialProfileScreen> createState() =>

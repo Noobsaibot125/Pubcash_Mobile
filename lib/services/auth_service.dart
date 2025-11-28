@@ -269,5 +269,5 @@ class AuthService with ChangeNotifier {
     notifyListeners();
   }
 
-  init() {}
+  void init() {}
 }

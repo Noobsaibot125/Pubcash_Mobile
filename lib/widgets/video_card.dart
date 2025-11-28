@@ -14,13 +14,13 @@ class VideoCard extends StatefulWidget {
   final bool isLiked;
 
   const VideoCard({
-    Key? key,
+    super.key,
     required this.promotion,
     required this.onLiked,
     required this.onShared,
     required this.onViewed,
     this.isLiked = false,
-  }) : super(key: key);
+  });
 
   @override
   State<VideoCard> createState() => _VideoCardState();

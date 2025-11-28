@@ -4,7 +4,7 @@ import '../services/api_service.dart';
 import '../utils/colors.dart';
 
 class GameHubScreen extends StatefulWidget {
-  const GameHubScreen({Key? key}) : super(key: key);
+  const GameHubScreen({super.key});
 
   @override
   State<GameHubScreen> createState() => _GameHubScreenState();
