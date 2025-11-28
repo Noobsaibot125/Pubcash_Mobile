@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../services/promotion_service.dart';
+import 'package:provider/provider.dart';
 import '../../models/promotion.dart';
+import '../../services/promotion_service.dart';
+import '../../services/auth_service.dart';
 import '../../utils/colors.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -11,349 +13,288 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Services
   final PromotionService _promotionService = PromotionService();
-  List<Promotion> _promotions = [];
-  Map<String, dynamic> _earnings = {'total': 0};
-  bool _loading = true;
-  String _filter = 'toutes';
+
+  // Futures for data
+  late Future<List<Promotion>> _promotionsFuture;
+  late Future<Map<String, dynamic>> _earningsFuture;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    // Initialize data fetching
+    _promotionsFuture = _promotionService.getUserPromotions();
+    _earningsFuture = _promotionService.getEarnings();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _loading = true);
-    try {
-      final promotions = await _promotionService.getPromotions(filter: _filter);
-      final earnings = await _promotionService.getEarnings();
-
-      setState(() {
-        _promotions = promotions;
-        _earnings = earnings;
-      });
-    } catch (e) {
-      print('Erreur chargement données: $e');
-    } finally {
-      setState(() => _loading = false);
-    }
+  void _refreshData() {
+    setState(() {
+      _promotionsFuture = _promotionService.getUserPromotions();
+      _earningsFuture = _promotionService.getEarnings();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // authService removed as it was unused
+    final authService = Provider.of<AuthService>(context);
+    final user = authService.currentUser;
 
     return Scaffold(
       backgroundColor: AppColors.light,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 2,
-        title: Row(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16.0),
+          child: CircleAvatar(
+            backgroundColor: AppColors.primary.withOpacity(0.1),
+            backgroundImage: user?.photoUrl != null && user!.photoUrl!.isNotEmpty
+                ? NetworkImage(user.photoUrl!)
+                : const AssetImage('assets/images/logo.png') as ImageProvider,
+          ),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Image.asset('assets/images/logo.png', height: 30),
-            const SizedBox(width: 10),
-            const Text(
-              'PubCash',
+            Text(
+              'Bienvenue,',
+              style: TextStyle(fontSize: 14, color: AppColors.textMuted),
+            ),
+            Text(
+              user?.nomUtilisateur ?? 'Utilisateur',
               style: TextStyle(
-                color: AppColors.primary,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
+                color: AppColors.textDark,
               ),
             ),
           ],
         ),
         actions: [
-          // Notification bell
           IconButton(
-            icon: const Icon(Icons.notifications, color: AppColors.textDark),
-            onPressed: () {},
+            icon: const Icon(Icons.notifications_outlined, color: AppColors.textDark),
+            onPressed: () { /* TODO: Notification screen */ },
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                child: Column(
-                  children: [
-                    // Carte Solde
-                    Container(
-                      margin: const EdgeInsets.all(16),
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Solde actuel',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    '${_earnings['total'] ?? 0}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 36,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const Text(
-                                    ' FCFA',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const Icon(Icons.visibility, color: Colors.white),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Navigation des catégories
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildCategoryIcon(Icons.home, 'Accueil', true),
-                          _buildCategoryIcon(Icons.diamond, 'Gain', false),
-                          _buildCategoryIcon(
-                            Icons.local_fire_department,
-                            'Feu',
-                            false,
-                          ),
-                          _buildCategoryIcon(Icons.assignment, 'Note', false),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Liste des vidéos
-                    if (_promotions.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 50),
-                        child: Text(
-                          'Aucune vidéo disponible pour le moment',
-                          style: TextStyle(color: AppColors.textMuted),
-                        ),
-                      )
-                    else
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _promotions.length,
-                        itemBuilder: (context, index) {
-                          final promo = _promotions[index];
-                          return _buildVideoCard(promo);
-                        },
-                      ),
-                  ],
-                ),
-              ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryIcon(IconData icon, String label, bool isActive) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isActive ? AppColors.primary : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withValues(alpha: 0.2),
-                blurRadius: 5,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Icon(
-            icon,
-            color: isActive ? Colors.white : AppColors.textMuted,
-            size: 24,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: isActive ? AppColors.primary : AppColors.textMuted,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVideoCard(Promotion promo) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Thumbnail vidéo
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
-                ),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Container(
-                    color: Colors.grey[300],
-                    // TODO: Charger l'image depuis l'URL
-                    child: const Icon(
-                      Icons.play_circle_filled,
-                      size: 64,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              // Badge de durée
-              if (promo.duree > 0)
-                Positioned(
-                  bottom: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '${promo.duree}s',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-
-          Padding(
-            padding: const EdgeInsets.all(12),
+        onRefresh: () async => _refreshData(),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        promo.titre,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textDark,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.secondary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '${promo.remunerationPack} FCFA',
-                        style: const TextStyle(
-                          color: AppColors.secondary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
+                _buildBalanceCard(),
+                const SizedBox(height: 24),
+                _buildSectionHeader('Vidéos pour vous'),
+                const SizedBox(height: 16),
+                _buildVideoList(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBalanceCard() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _earningsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Text('Erreur: ${snapshot.error}');
+        }
+        if (!snapshot.hasData) {
+          return const Text('Aucun solde disponible.');
+        }
+
+        final earnings = snapshot.data!;
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Solde Actuel',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${earnings['solde_actuel'] ?? 0} FCFA',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  promo.description ?? '',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+        color: AppColors.textDark,
+      ),
+    );
+  }
+
+  Widget _buildVideoList() {
+    return FutureBuilder<List<Promotion>>(
+      future: _promotionsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Erreur: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(
+            child: Text(
+              'Aucune vidéo disponible pour le moment.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 16),
+            ),
+          );
+        }
+
+        final promotions = snapshot.data!;
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: promotions.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 16),
+          itemBuilder: (context, index) {
+            final promotion = promotions[index];
+            return _buildVideoCard(promotion);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildVideoCard(Promotion promotion) {
+    return GestureDetector(
+      onTap: () {
+        // TODO: Navigate to video player screen
+      },
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              alignment: Alignment.bottomLeft,
+              children: [
+                Image.network(
+                  promotion.thumbnailUrl ?? 'https://via.placeholder.com/500x250.png?text=PubCash',
+                  height: 180,
                   width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // TODO: Ouvrir le lecteur vidéo
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    height: 180,
+                    color: Colors.grey[200],
+                    child: const Center(child: Icon(Icons.error_outline, color: Colors.grey)),
+                  ),
+                ),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
                     ),
-                    child: const Text(
-                      'Regarder et gagner',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                       Container(
+                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                         decoration: BoxDecoration(
+                           color: AppColors.primary.withOpacity(0.8),
+                           borderRadius: BorderRadius.circular(8),
+                         ),
+                         child: Text(
+                           '+${promotion.remunerationPack} FCFA',
+                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                         ),
+                       ),
+                       Container(
+                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                         decoration: BoxDecoration(
+                           color: Colors.black.withOpacity(0.5),
+                           borderRadius: BorderRadius.circular(8),
+                         ),
+                         child: Text(
+                           '${promotion.duree}s',
+                           style: const TextStyle(color: Colors.white),
+                         ),
+                       ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    promotion.titre,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    promotion.description ?? 'Aucune description',
+                    style: TextStyle(fontSize: 14, color: AppColors.textMuted),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

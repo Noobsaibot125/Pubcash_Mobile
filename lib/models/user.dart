@@ -7,11 +7,13 @@ class User {
   final String? dateNaissance;
   final String? contact;
   final String? genre;
+  final String? photoUrl;
   
   User({
     this.id,
     required this.nomUtilisateur,
     required this.email,
+    this.photoUrl,
     this.commune,
     this.ville,
     this.dateNaissance,
@@ -29,6 +31,7 @@ class User {
       dateNaissance: json['date_naissance'],
       contact: json['contact'],
       genre: json['genre'],
+      photoUrl: json['photo_profil'],
     );
   }
   
@@ -41,6 +44,7 @@ class User {
       'date_naissance': dateNaissance,
       'contact': contact,
       'genre': genre,
+      'photo_profil': photoUrl,
     };
   }
 }
