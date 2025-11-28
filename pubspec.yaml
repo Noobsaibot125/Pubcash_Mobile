@@ -62,6 +62,12 @@ dependencies:
   
   # Formulaires
   dropdown_search: ^5.0.6
+  
+  # Vidéo & Média
+  video_player: ^2.8.7
+  chewie: ^1.8.1
+  cached_network_image: ^3.3.1
+  share_plus: ^7.2.2
 
 dev_dependencies:
   flutter_test:

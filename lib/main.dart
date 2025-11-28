@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
+import 'utils/colors.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/auth/complete_profile_screen.dart';
+import 'screens/auth/complete_social_profile_screen.dart';
 import 'screens/main_navigation_screen.dart';
 
 void main() {
@@ -40,14 +41,24 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
 
-    // Si l'utilisateur est authentifié
+    // Si l'utilisateur est authentifié (token présent)
     if (authService.isAuthenticated) {
-      // Si le profil est complet -> Navigation Principale
-      if (authService.isProfileComplete) {
-        return const MainNavigationScreen();
+      // Si on charge encore les infos utilisateur (init en cours)
+      if (authService.currentUser == null && authService.isLoading) {
+        return const Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
+        );
       }
-      // Sinon -> Écran de complétion de profil
-      return const CompleteProfileScreen();
+
+      // Si le profil nécessite d'être complété (Social Login incomplet)
+      if (authService.requiresProfileCompletion) {
+        return const CompleteSocialProfileScreen();
+      }
+
+      // Sinon -> Navigation Principale
+      return const MainNavigationScreen();
     }
 
     // Sinon -> Login

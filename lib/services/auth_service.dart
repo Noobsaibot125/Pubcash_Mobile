@@ -15,22 +15,13 @@ class AuthService with ChangeNotifier {
   User? _currentUser;
   bool _isLoading = false;
   String? _token;
+  bool _requiresProfileCompletion = false;
 
   User? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _token != null;
+  bool get requiresProfileCompletion => _requiresProfileCompletion;
 
-  // Initialisation au démarrage
-  Future<void> init() async {
-    _token = await _secureStorage.read(key: AppConstants.keyAccessToken);
-    if (_token != null) {
-      _apiService.setAuthToken(_token!);
-      // Ici on pourrait récupérer le profil utilisateur si nécessaire
-      // await fetchUserProfile();
-    }
-  }
-
-  // Inscription
   Future<bool> register(User user, String password) async {
     try {
       _setLoading(true);
@@ -66,10 +57,7 @@ class AuthService with ChangeNotifier {
 
       final response = await _apiService.post(
         AppConstants.loginEndpoint,
-        data: {
-          'identifier': email,
-          'password': password,
-        },
+        data: {'identifier': email, 'password': password},
       );
 
       await _handleAuthResponse(response.data);
@@ -137,6 +125,7 @@ class AuthService with ChangeNotifier {
     _apiService.clearAuthToken();
     _currentUser = null;
     _token = null;
+    _requiresProfileCompletion = false;
 
     // Déconnexion sociale si nécessaire
     if (await _googleSignIn.isSignedIn()) {
@@ -148,10 +137,19 @@ class AuthService with ChangeNotifier {
   }
 
   // Traitement de la réponse d'auth
-  Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
-    final String accessToken = data['accessToken'];
-    final String refreshToken = data['refreshToken'];
+ Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
+    print("🔍 Analyse de la réponse Auth: $data"); // Pour voir ce qui arrive vraiment
 
+    // 1. SÉCURISATION TOTALE DES TOKENS (Convertit tout en String, même les objets)
+    // On utilise ?.toString() pour éviter le crash si c'est un Map ou null
+    final String accessToken = data['accessToken']?.toString() ?? '';
+    final String refreshToken = data['refreshToken']?.toString() ?? '';
+
+    if (accessToken.isEmpty) {
+      throw Exception("Token d'accès manquant dans la réponse API");
+    }
+
+    // 2. Sauvegarde
     await _secureStorage.write(
       key: AppConstants.keyAccessToken,
       value: accessToken,
@@ -164,15 +162,39 @@ class AuthService with ChangeNotifier {
     _token = accessToken;
     _apiService.setAuthToken(accessToken);
 
-    // Si l'API renvoie l'utilisateur, on le stocke
+    // 3. Traitement de l'utilisateur
     if (data['user'] != null) {
-      _currentUser = User.fromJson(data['user']);
+      try {
+        // On vérifie que 'user' est bien une Map avant de l'envoyer
+        if (data['user'] is Map<String, dynamic>) {
+           _currentUser = User.fromJson(data['user']);
+        } else {
+           print("⚠️ ATTENTION: data['user'] n'est pas un objet JSON valide");
+        }
+      } catch (e) {
+        print("❌ Erreur parsing User: $e");
+        // On ne rethrow pas ici pour ne pas bloquer le login si juste le profil plante
+      }
+
+      if (_currentUser != null && _currentUser!.isSocialUser && !isProfileComplete) {
+        _requiresProfileCompletion = true;
+        // Note: On ne throw pas forcément ici si on veut laisser l'utilisateur entrer
+        // throw IncompleteProfileException(); 
+      } else {
+        _requiresProfileCompletion = false;
+      }
     }
 
     notifyListeners();
+}
 
-    if (!isProfileComplete) {
-      throw IncompleteProfileException();
+  // Récupérer le profil complet de l'utilisateur
+  Future<Map<String, dynamic>> getUserProfile() async {
+    try {
+      final response = await _apiService.get('/user/profile');
+      return response.data;
+    } catch (e) {
+      throw Exception('Erreur lors de la récupération du profil: $e');
     }
   }
 
@@ -206,12 +228,11 @@ class AuthService with ChangeNotifier {
         _apiService.setAuthToken(_token!);
       }
 
-      // On met à jour l'utilisateur localement
-      if (_currentUser != null) {
-        // Idéalement, on devrait refetch le profil complet, mais on peut patcher localement pour l'instant
-        // Ou on rappelle init() / fetchProfile()
-        // Pour simplifier, on considère que si ça réussit, le profil est complet
-        // On peut recharger le user depuis le token décodé ou un endpoint /me
+      // Mettre à jour l'utilisateur localement
+      if (response.data['user'] != null) {
+        _currentUser = User.fromJson(response.data['user']);
+        // Une fois complété, on met à jour l'état
+        _requiresProfileCompletion = false;
       }
 
       notifyListeners();
@@ -224,7 +245,15 @@ class AuthService with ChangeNotifier {
 
   bool get isProfileComplete {
     if (_currentUser == null) return false;
-    // Vérifie si les champs obligatoires sont présents
+
+    // Si l'utilisateur n'est pas un utilisateur social (inscription normale),
+    // son profil est déjà complet (tous les champs ont été remplis à l'inscription)
+    if (!_currentUser!.isSocialUser) {
+      return true;
+    }
+
+    // Pour les utilisateurs sociaux (Google/Facebook),
+    // vérifier si les champs obligatoires sont présents
     return _currentUser!.commune != null &&
         _currentUser!.commune!.isNotEmpty &&
         _currentUser!.contact != null &&
@@ -239,4 +268,6 @@ class AuthService with ChangeNotifier {
     _isLoading = value;
     notifyListeners();
   }
+
+  init() {}
 }

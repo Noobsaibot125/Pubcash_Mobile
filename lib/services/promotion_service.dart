@@ -7,14 +7,20 @@ class PromotionService {
   // Récupérer les promotions/vidéos avec filtre
   Future<List<Promotion>> getPromotions({String filter = 'toutes'}) async {
     try {
+      print('Fetching promotions with filter: $filter');
       final response = await _apiService.get(
         '/promotions',
         queryParameters: {'filter': filter},
       );
 
+      print('Response status: ${response.statusCode}');
+      print('Response data length: ${(response.data as List).length}');
+      // print('Response data: ${response.data}'); // Décommenter si besoin de voir tout le JSON
+
       final List<dynamic> data = response.data;
       return data.map((json) => Promotion.fromJson(json)).toList();
     } catch (e) {
+      print('Error fetching promotions: $e');
       rethrow;
     }
   }

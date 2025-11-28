@@ -2,12 +2,16 @@
 class AppConstants {
   // API URLs
   static const String baseUrlDev = 'http://10.0.2.2:5000/api';
-  static const String baseUrlProd = 'http://31.97.68.170/api';
   
-  // Utiliser dev ou prod selon l'environnement
-  static const String baseUrl = baseUrlDev;
+  // URL de PROD (Basée sur votre REACT_APP_API_URL)
+  // C'est l'URL sécurisée (https) sans le port 5000 explicite, gérée par le serveur web
+  static const String baseUrlProd = 'https://pub-cash.com/api';
   
-  // Endpoints
+  // --- CONFIGURATION ACTUELLE : PROD ---
+  // On pointe la variable 'baseUrl' vers la prod
+  static const String baseUrl = baseUrlProd;
+  
+  // Endpoints (Ceux qui marchaient dans votre ancien code)
   static const String registerEndpoint = '/auth/utilisateur/register';
   static const String loginEndpoint = '/auth/utilisateur/login';
   static const String googleAuthEndpoint = '/auth/google';
