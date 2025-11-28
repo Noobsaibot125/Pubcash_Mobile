@@ -1,3 +1,5 @@
+import 'quiz.dart';
+
 class Promotion {
   final int id;
   final String titre;
@@ -7,6 +9,7 @@ class Promotion {
   final int remunerationPack;
   final int duree;
   final String? gameType;
+  final Quiz? quiz;
 
   Promotion({
     required this.id,
@@ -17,6 +20,7 @@ class Promotion {
     required this.remunerationPack,
     required this.duree,
     this.gameType,
+    this.quiz,
   });
 
   factory Promotion.fromJson(Map<String, dynamic> json) {
@@ -29,6 +33,7 @@ class Promotion {
       remunerationPack: json['remuneration_pack'] ?? 0,
       duree: json['duree'] ?? 0,
       gameType: json['game_type'],
+      quiz: json['quiz'] != null ? Quiz.fromJson(json['quiz']) : null,
     );
   }
 }

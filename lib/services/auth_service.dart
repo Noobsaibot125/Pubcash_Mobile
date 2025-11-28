@@ -5,6 +5,7 @@ import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'api_service.dart';
 import '../models/user.dart';
 import '../utils/constants.dart';
+import '../utils/exceptions.dart';
 
 class AuthService with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -58,6 +59,35 @@ class AuthService with ChangeNotifier {
     }
   }
 
+  // Mise à jour du profil
+  Future<void> updateProfile({
+    required String nom,
+    required String prenom,
+    required String telephone,
+  }) async {
+    try {
+      _setLoading(true);
+
+      final response = await _apiService.patch(
+        '/auth/utilisateur/profile', // Endpoint supposé
+        data: {
+          'nom_utilisateur': nom,
+          'contact': telephone,
+        },
+      );
+
+      // Mettre à jour l'utilisateur local avec les nouvelles données
+      if (response.statusCode == 200 && response.data != null) {
+        _currentUser = User.fromJson(response.data);
+        notifyListeners();
+      }
+    } catch (e) {
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   // Connexion Classique
   Future<void> login(String email, String password) async {
     try {
@@ -66,8 +96,8 @@ class AuthService with ChangeNotifier {
       final response = await _apiService.post(
         AppConstants.loginEndpoint,
         data: {
-          'identifier': email, // Backend attend 'identifier'
-          'password': password, // Backend attend 'password'
+          'identifier': email,
+          'password': password,
         },
       );
 
@@ -169,6 +199,10 @@ class AuthService with ChangeNotifier {
     }
 
     notifyListeners();
+
+    if (!isProfileComplete) {
+      throw IncompleteProfileException();
+    }
   }
 
   // Complétion de profil
@@ -223,7 +257,11 @@ class AuthService with ChangeNotifier {
     return _currentUser!.commune != null &&
         _currentUser!.commune!.isNotEmpty &&
         _currentUser!.contact != null &&
-        _currentUser!.contact!.isNotEmpty;
+        _currentUser!.contact!.isNotEmpty &&
+        _currentUser!.dateNaissance != null &&
+        _currentUser!.dateNaissance!.isNotEmpty &&
+        _currentUser!.genre != null &&
+        _currentUser!.genre!.isNotEmpty;
   }
 
   void _setLoading(bool value) {
