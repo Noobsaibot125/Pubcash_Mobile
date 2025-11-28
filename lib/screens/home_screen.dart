@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import '../services/promotion_service.dart';
-import '../services/video_service.dart';
-import '../models/promotion.dart';
-import 'video_player_screen.dart';
-import '../utils/colors.dart';
-import '../widgets/video_card.dart';
-import '../widgets/quiz_modal.dart';
+import 'package:provider/provider.dart';
+import 'package:pub_cash_mobile/screens/quiz_screen.dart';
+import '../../models/promotion.dart';
+import '../../services/promotion_service.dart';
+import '../../services/auth_service.dart';
+import '../../utils/colors.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,466 +14,347 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Services
   final PromotionService _promotionService = PromotionService();
-  final VideoService _videoService = VideoService();
 
-  List<Promotion> _promotions = [];
-  Map<String, dynamic> _earnings = {'total': 0};
-  int _points = 0;
-  bool _loading = true;
-  String _filter = 'toutes';
-
-  // État des interactions par vidéo
-  final Map<int, bool> _likedVideos = {};
+  // Futures for data
+  late Future<List<Promotion>> _promotionsFuture;
+  late Future<Map<String, dynamic>> _earningsFuture;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    // Initialize data fetching
+    _promotionsFuture = _promotionService.getUserPromotions();
+    _earningsFuture = _promotionService.getEarnings();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _loading = true);
-    try {
-      await Future.wait([_loadPromotions(), _loadEarnings(), _loadPoints()]);
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _loadPromotions() async {
-    try {
-      final promotions = await _promotionService.getPromotions(filter: _filter);
-      setState(() {
-        _promotions = promotions;
-      });
-    } catch (e) {
-      print('Erreur chargement promotions: $e');
-    }
-  }
-
-  Future<void> _loadEarnings() async {
-    try {
-      final earnings = await _promotionService.getEarnings();
-      setState(() {
-        _earnings = earnings;
-      });
-    } catch (e) {
-      print('Erreur chargement gains: $e');
-    }
-  }
-
-  Future<void> _loadPoints() async {
-    try {
-      final points = await _videoService.getPoints();
-      setState(() {
-        _points = points;
-      });
-    } catch (e) {
-      print('Erreur chargement points: $e');
-    }
-  }
-
-  void _handleVideoLiked(int promoId) {
+  void _refreshData() {
     setState(() {
-      _likedVideos[promoId] = true;
+      _promotionsFuture = _promotionService.getUserPromotions();
+      _earningsFuture = _promotionService.getEarnings();
     });
-    _loadEarnings(); // Refresh gains
-  }
-
-  void _handleVideoShared(int promoId) {
-    // Vérifier s'il y a un quiz
-    final promo = _promotions.firstWhere((p) => p.id == promoId);
-    if (promo.gameId != null && promo.question != null) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => QuizModal(
-          promotion: promo,
-          onCompleted: () {
-            _loadPoints(); // Refresh points après le quiz
-          },
-        ),
-      );
-    }
-
-    // Refresh et recharger les promotions
-    _loadPromotions();
-  }
-void _openVideoPlayer(Promotion promo) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => FullScreenVideoScreen(
-          promotion: promo,
-          onVideoViewed: () => _handleVideoViewed(promo.id),
-        ),
-      ),
-    );
-  }
-  void _handleVideoViewed(int promoId) {
-    // Retirer la vidéo de la liste
-    setState(() {
-      _promotions.removeWhere((p) => p.id == promoId);
-    });
-    _loadEarnings(); // Refresh gains
   }
 
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
+    final user = authService.currentUser;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _loadData,
-          color: AppColors.primary,
-          child: CustomScrollView(
-            slivers: [
-              // === APP BAR PERSONNALISÉ ===
-              SliverAppBar(
-                floating: true,
-                backgroundColor: Colors.white,
-                elevation: 2,
-                shadowColor: Colors.black.withOpacity(0.1),
-                title: Row(
-                  children: [
-                    // Logo
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'PC',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'PubCash',
-                      style: TextStyle(
-                        color: AppColors.textDark,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
-                      ),
-                    ),
-                  ],
-                ),
-                actions: [
-                  // Bouton notifications
-                  IconButton(
-                    icon: Stack(
-                      children: [
-                        const Icon(
-                          Icons.notifications_outlined,
-                          color: AppColors.textDark,
-                          size: 28,
-                        ),
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: AppColors.secondary,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    onPressed: () {},
-                  ),
-                ],
-              ),
-
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20),
-
-                    // === CARTE SOLDE ORANGE 3D ===
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFFFF8C42), Color(0xFFFF6B35)],
-                          ),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFFF8C42).withOpacity(0.4),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Solde actuel',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                        Icons.star,
-                                        color: Colors.white,
-                                        size: 18,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        '$_points pts',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  '${_earnings['total'] ?? 0}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 42,
-                                    fontWeight: FontWeight.bold,
-                                    height: 1,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Padding(
-                                  padding: EdgeInsets.only(bottom: 4),
-                                  child: Text(
-                                    'FCFA',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                const Spacer(),
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.visibility_outlined,
-                                    color: Colors.white,
-                                    size: 24,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 28),
-
-                    // === FILTRES CIRCULAIRES ===
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _buildFilterIcon(
-                            Icons.home_rounded,
-                            'Tous',
-                            'toutes',
-                            const Color(0xFFFF6B35),
-                          ),
-                          _buildFilterIcon(
-                            Icons.attach_money,
-                            'Argent',
-                            'argent',
-                            const Color(0xFFC0C0C0),
-                          ),
-                          _buildFilterIcon(
-                            Icons.workspace_premium,
-                            'Gold',
-                            'gold',
-                            const Color(0xFFFFD700),
-                          ),
-                          _buildFilterIcon(
-                            Icons.diamond,
-                            'Diamant',
-                            'diamant',
-                            const Color(0xFF00BCD4),
-                          ),
-                          _buildFilterIcon(
-                            Icons.location_on,
-                            'Commune',
-                            'ma_commune',
-                            const Color(0xFF9C27B0),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
-
-              // === LISTE DES VIDÉOS ===
-              if (_loading)
-                const SliverFillRemaining(
-                  child: Center(
-                    child: CircularProgressIndicator(color: AppColors.primary),
-                  ),
-                )
-              else if (_promotions.isEmpty)
-                const SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.video_library_outlined,
-                          size: 80,
-                          color: AppColors.textMuted,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Aucune vidéo disponible',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: AppColors.textMuted,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Revenez plus tard !',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  sliver: SliverList(
-    delegate: SliverChildBuilderDelegate((context, index) {
-      final promo = _promotions[index];
-      return GestureDetector(
-        onTap: () => _openVideoPlayer(promo), // <--- C'est ici qu'on lance le full screen
-        child: VideoCard(
-          promotion: promo,
-          // Désactive les boutons sur la carte pour forcer le clic global
-          isLiked: _likedVideos[promo.id] ?? false,
-          onLiked: () {}, 
-          onShared: () {},
-          onViewed: () {},
+      backgroundColor: AppColors.light,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16.0),
+          child: CircleAvatar(
+            backgroundColor: AppColors.primary.withOpacity(0.1),
+            backgroundImage: user?.photoUrl != null && user!.photoUrl!.isNotEmpty
+                ? NetworkImage(user.photoUrl!)
+                : const AssetImage('assets/images/logo.png') as ImageProvider,
+          ),
         ),
-      );
-    }, childCount: _promotions.length),
-  ),
-                ),
-            ],
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bienvenue,',
+              style: TextStyle(fontSize: 14, color: AppColors.textMuted),
+            ),
+            Text(
+              user?.nomUtilisateur ?? 'Utilisateur',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textDark,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined, color: AppColors.textDark),
+            onPressed: () { /* TODO: Notification screen */ },
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async => _refreshData(),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildBalanceCard(),
+                const SizedBox(height: 24),
+                _buildSectionHeader('Vidéos pour vous'),
+                const SizedBox(height: 16),
+                _buildVideoList(),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildFilterIcon(
-    IconData icon,
-    String label,
-    String filterValue,
-    Color color,
-  ) {
-    final isActive = _filter == filterValue;
+  Widget _buildBalanceCard() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _earningsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Text('Erreur: ${snapshot.error}');
+        }
+        if (!snapshot.hasData) {
+          return const Text('Aucun solde disponible.');
+        }
 
+        final earnings = snapshot.data!;
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Solde Actuel',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${earnings['solde_actuel'] ?? 0} FCFA',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+        color: AppColors.textDark,
+      ),
+    );
+  }
+
+  Widget _buildVideoList() {
+    return FutureBuilder<List<Promotion>>(
+      future: _promotionsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Erreur: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(
+            child: Text(
+              'Aucune vidéo disponible pour le moment.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 16),
+            ),
+          );
+        }
+
+        final promotions = snapshot.data!;
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: promotions.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 16),
+          itemBuilder: (context, index) {
+            final promotion = promotions[index];
+            return _buildVideoCard(promotion);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildVideoCard(Promotion promotion) {
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _filter = filterValue;
-        });
-        _loadPromotions();
+        // TODO: Navigate to video player screen
       },
-      child: Column(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: isActive ? color : Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: (isActive ? color : Colors.grey).withOpacity(0.3),
-                  blurRadius: isActive ? 12 : 8,
-                  offset: Offset(0, isActive ? 6 : 4),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              alignment: Alignment.bottomLeft,
+              children: [
+                Image.network(
+                  promotion.thumbnailUrl ?? 'https://via.placeholder.com/500x250.png?text=PubCash',
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    height: 180,
+                    color: Colors.grey[200],
+                    child: const Center(child: Icon(Icons.error_outline, color: Colors.grey)),
+                  ),
+                ),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                       Container(
+                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                         decoration: BoxDecoration(
+                           color: AppColors.primary.withOpacity(0.8),
+                           borderRadius: BorderRadius.circular(8),
+                         ),
+                         child: Text(
+                           '+${promotion.remunerationPack} FCFA',
+                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                         ),
+                       ),
+                       Container(
+                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                         decoration: BoxDecoration(
+                           color: Colors.black.withOpacity(0.5),
+                           borderRadius: BorderRadius.circular(8),
+                         ),
+                         child: Text(
+                           '${promotion.duree}s',
+                           style: const TextStyle(color: Colors.white),
+                         ),
+                       ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            child: Icon(icon, color: isActive ? Colors.white : color, size: 28),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-              color: isActive ? color : AppColors.textMuted,
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    promotion.titre,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    promotion.description ?? 'Aucune description',
+                    style: TextStyle(fontSize: 14, color: AppColors.textMuted),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (promotion.quiz != null)
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.quiz_outlined),
+                          label: const Text('Commencer le Quiz'),
+                          onPressed: () async {
+                            final bool? quizSuccess = await Navigator.push<bool>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => QuizScreen(promotion: promotion),
+                              ),
+                            );
+                            if (quizSuccess == true) {
+                              _refreshData();
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.secondary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                        ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.favorite_border, color: AppColors.primary),
+                        onPressed: () async {
+                          try {
+                            await _promotionService.likePromotion(promotion.id);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Vidéo aimée !'), backgroundColor: AppColors.success),
+                            );
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Erreur: ${e.toString()}'), backgroundColor: Colors.red),
+                            );
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.share, color: AppColors.secondary),
+                        onPressed: () async {
+                          try {
+                            await _promotionService.sharePromotion(promotion.id);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Vidéo partagée !'), backgroundColor: AppColors.success),
+                            );
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Erreur: ${e.toString()}'), backgroundColor: Colors.red),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

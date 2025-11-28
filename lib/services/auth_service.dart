@@ -50,6 +50,35 @@ class AuthService with ChangeNotifier {
     }
   }
 
+  // Mise à jour du profil
+  Future<void> updateProfile({
+    required String nom,
+    required String prenom,
+    required String telephone,
+  }) async {
+    try {
+      _setLoading(true);
+
+      final response = await _apiService.patch(
+        '/auth/utilisateur/profile', // Endpoint supposé
+        data: {
+          'nom_utilisateur': nom,
+          'contact': telephone,
+        },
+      );
+
+      // Mettre à jour l'utilisateur local avec les nouvelles données
+      if (response.statusCode == 200 && response.data != null) {
+        _currentUser = User.fromJson(response.data);
+        notifyListeners();
+      }
+    } catch (e) {
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   // Connexion Classique
   Future<void> login(String email, String password) async {
     try {
@@ -57,7 +86,10 @@ class AuthService with ChangeNotifier {
 
       final response = await _apiService.post(
         AppConstants.loginEndpoint,
-        data: {'identifier': email, 'password': password},
+        data: {
+          'identifier': email,
+          'password': password,
+        },
       );
 
       await _handleAuthResponse(response.data);
@@ -186,15 +218,9 @@ class AuthService with ChangeNotifier {
     }
 
     notifyListeners();
-}
 
-  // Récupérer le profil complet de l'utilisateur
-  Future<Map<String, dynamic>> getUserProfile() async {
-    try {
-      final response = await _apiService.get('/user/profile');
-      return response.data;
-    } catch (e) {
-      throw Exception('Erreur lors de la récupération du profil: $e');
+    if (!isProfileComplete) {
+      throw IncompleteProfileException();
     }
   }
 

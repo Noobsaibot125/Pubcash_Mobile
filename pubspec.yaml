@@ -59,6 +59,7 @@ dependencies:
   # Social Auth
   google_sign_in: ^6.1.6
   flutter_facebook_auth: ^6.0.3
+  url_launcher: ^6.2.1
   
   # Formulaires
   dropdown_search: ^5.0.6

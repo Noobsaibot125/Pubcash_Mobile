@@ -8,6 +8,8 @@ class User {
   final String? contact;
   final String? genre;
   final String? photoUrl;
+  
+  final String? photoUrl;
   final String? idGoogle;
   final String? idFacebook;
 
@@ -15,6 +17,7 @@ class User {
     this.id,
     required this.nomUtilisateur,
     required this.email,
+    this.photoUrl,
     this.photoUrl,
     this.commune,
     this.ville,
@@ -29,6 +32,15 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
+      id: json['id'],
+      nomUtilisateur: json['nom_utilisateur'],
+      email: json['email'],
+      commune: json['commune_choisie'] ?? json['commune'],
+      ville: json['ville'],
+      dateNaissance: json['date_naissance'],
+      contact: json['contact'],
+      genre: json['genre'],
+      photoUrl: json['photo_profil'],
       // SÉCURITÉ 1 : Conversion forcée en int pour l'ID
       id: int.tryParse(json['id']?.toString() ?? '0'),
 
@@ -65,6 +77,7 @@ class User {
       'date_naissance': dateNaissance,
       'contact': contact,
       'genre': genre,
+      'photo_profil': photoUrl,
       'photo_profil': photoUrl,
       'id_google': idGoogle,
       'id_facebook': idFacebook,
