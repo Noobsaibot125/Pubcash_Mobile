@@ -31,7 +31,7 @@ class User {
       dateNaissance: json['date_naissance'],
       contact: json['contact'],
       genre: json['genre'],
-      photoUrl: json['photo_url'],
+      photoUrl: json['photo_profil'],
     );
   }
   
@@ -44,7 +44,7 @@ class User {
       'date_naissance': dateNaissance,
       'contact': contact,
       'genre': genre,
-      'photo_url': photoUrl,
+      'photo_profil': photoUrl,
     };
   }
 }
