@@ -62,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(fontSize: 14, color: AppColors.textMuted),
             ),
             Text(
-              user?.nom ?? 'Utilisateur',
+              user?.nomUtilisateur ?? 'Utilisateur',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
