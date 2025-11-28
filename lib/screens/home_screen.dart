@@ -77,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () { /* TODO: Notification screen */ },
           ),
           const SizedBox(width: 8),
-        ],
+        
       ),
       body: RefreshIndicator(
         onRefresh: () async => _refreshData(),
