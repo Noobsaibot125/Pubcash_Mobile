@@ -67,8 +67,8 @@ class AuthService with ChangeNotifier {
       final response = await _apiService.post(
         AppConstants.loginEndpoint,
         data: {
-          'email': email,
-          'mot_de_passe': password,
+          'identifier': email,
+          'password': password,
         },
       );
 
@@ -228,7 +228,11 @@ class AuthService with ChangeNotifier {
     return _currentUser!.commune != null &&
         _currentUser!.commune!.isNotEmpty &&
         _currentUser!.contact != null &&
-        _currentUser!.contact!.isNotEmpty;
+        _currentUser!.contact!.isNotEmpty &&
+        _currentUser!.dateNaissance != null &&
+        _currentUser!.dateNaissance!.isNotEmpty &&
+        _currentUser!.genre != null &&
+        _currentUser!.genre!.isNotEmpty;
   }
 
   void _setLoading(bool value) {

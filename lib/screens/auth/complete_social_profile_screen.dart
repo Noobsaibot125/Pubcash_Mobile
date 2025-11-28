@@ -81,7 +81,11 @@ class _CompleteSocialProfileScreenState
         _communes = data.map((json) => json['nom'].toString()).toList();
       });
     } catch (e) {
-      print('Erreur chargement communes: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Erreur chargement communes: $e')));
+      }
     } finally {
       setState(() => _isLoadingCommunes = false);
     }
