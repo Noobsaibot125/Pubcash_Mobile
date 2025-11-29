@@ -2,23 +2,30 @@ class User {
   final int? id;
   final String nomUtilisateur;
   final String email;
+  final String? nom; // Ajout
+  final String? prenom; // Ajout
   final String? commune;
   final String? ville;
   final String? dateNaissance;
   final String? contact;
   final String? genre;
   final String? photoUrl;
-  
-  final String? photoUrl;
+  final String? imageBackground; // Ajout
   final String? idGoogle;
   final String? idFacebook;
+  final String? codeParrainage;
+  final int points;
+  final double solde;
+  final List<dynamic>? referrals; // Liste des filleuls
 
   User({
     this.id,
     required this.nomUtilisateur,
     required this.email,
+    this.nom,
+    this.prenom,
     this.photoUrl,
-    this.photoUrl,
+    this.imageBackground,
     this.commune,
     this.ville,
     this.dateNaissance,
@@ -26,70 +33,73 @@ class User {
     this.genre,
     this.idGoogle,
     this.idFacebook,
+    this.codeParrainage,
+    this.points = 0,
+    this.solde = 0.0,
+    this.referrals,
   });
 
-  bool get isSocialUser => idGoogle != null || idFacebook != null;
+  bool get isSocialUser => 
+      (idGoogle != null && idGoogle!.isNotEmpty) || 
+      (idFacebook != null && idFacebook!.isNotEmpty);
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'],
-      nomUtilisateur: json['nom_utilisateur'],
-      email: json['email'],
-      commune: json['commune_choisie'] ?? json['commune'],
-      ville: json['ville'],
-      dateNaissance: json['date_naissance'],
-      contact: json['contact'],
-      genre: json['genre'],
-      photoUrl: json['photo_profil'],
-      // SÉCURITÉ 1 : Conversion forcée en int pour l'ID
       id: int.tryParse(json['id']?.toString() ?? '0'),
-
-      // SÉCURITÉ 2 : Gestion des champs TEXTE obligatoires
-      // Si l'API renvoie null, on met une chaine vide pour éviter le crash
       nomUtilisateur: json['nom_utilisateur']?.toString() ?? 'Utilisateur',
       email: json['email']?.toString() ?? '',
-
-      // SÉCURITÉ 3 : LE CŒUR DU PROBLÈME (Map vs String)
-      // On utilise .toString() partout. Si 'commune' est un objet {id:1, nom:...}, 
-      // cela deviendra une String "{...}" au lieu de faire planter l'app.
+      nom: _safeString(json['nom']),
+      prenom: _safeString(json['prenom']),
       commune: _safeString(json['commune_choisie']) ?? _safeString(json['commune']),
       ville: _safeString(json['ville']),
-      
       dateNaissance: _safeString(json['date_naissance']),
       contact: _safeString(json['contact']),
       genre: _safeString(json['genre']),
-      
-      // Gestion de la photo (SQL: photo_profil -> Dart: photoUrl)
-      photoUrl: _safeString(json['photo_profil']) ?? _safeString(json['photo_url']),
-      
+      photoUrl: _safeString(json['photo_profil']) ?? _safeString(json['profile_image_url']),
+      imageBackground: _safeString(json['image_background']) ?? _safeString(json['background_image_url']),
       idGoogle: _safeString(json['id_google']),
       idFacebook: _safeString(json['id_facebook']),
+      codeParrainage: _safeString(json['code_parrainage']),
+      points: _safeInt(json['points']),
+      solde: _safeDouble(json['remuneration_utilisateur']) ?? _safeDouble(json['solde']) ?? 0.0,
+      referrals: json['referrals'] ?? [],
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id, // J'ai ajouté l'ID au toJson, utile pour les updates
+      'id': id,
       'nom_utilisateur': nomUtilisateur,
       'email': email,
-      'commune_choisie': commune, // Aligné avec ta base de données
+      'nom': nom,
+      'prenom': prenom,
+      'commune_choisie': commune,
       'ville': ville,
       'date_naissance': dateNaissance,
       'contact': contact,
       'genre': genre,
-      'photo_profil': photoUrl,
-      'photo_profil': photoUrl,
-      'id_google': idGoogle,
-      'id_facebook': idFacebook,
+      'code_parrainage': codeParrainage,
     };
   }
 
-  // --- Fonction utilitaire pour éviter l'erreur rouge ---
-  // Cette fonction transforme n'importe quoi (Objet, Liste, Int) en String
-  // ou renvoie null si c'est vide.
   static String? _safeString(dynamic value) {
     if (value == null) return null;
     if (value is String) return value;
     return value.toString();
+  }
+
+  static int _safeInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  static double? _safeDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return 0.0;
   }
 }

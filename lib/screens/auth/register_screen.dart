@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-import '../../models/user.dart';
-import '../../models/ville.dart';
+import 'package:intl/intl.dart'; // Pour formater la date
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
+import '../../models/ville.dart';
+import '../../utils/api_constants.dart';
 import '../../utils/colors.dart';
 import '../../utils/validators.dart';
-import '../../utils/constants.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/loading_overlay.dart';
@@ -22,29 +21,31 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  // On utilise ApiService directement ici juste pour charger les villes/communes
+  final _apiService = ApiService(); 
 
   // Controllers
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _contactController = TextEditingController();
   final _dateController = TextEditingController();
+  final _contactController = TextEditingController();
   final _referralController = TextEditingController();
 
-  // State variables
-  String? _selectedGenre;
-  String? _selectedVille;
+  // State pour les Dropdowns
+  String? _selectedVilleNom;
   String? _selectedCommune;
+  String _selectedGenre = '';
+  
   List<Ville> _villes = [];
   List<String> _communes = [];
-  bool _isLoadingVilles = false;
   bool _isLoadingCommunes = false;
 
   @override
   void initState() {
     super.initState();
-    _fetchVilles();
+    _loadVilles();
   }
 
   @override
@@ -53,69 +54,63 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _contactController.dispose();
     _dateController.dispose();
+    _contactController.dispose();
     _referralController.dispose();
     super.dispose();
   }
 
-  Future<void> _fetchVilles() async {
-    setState(() => _isLoadingVilles = true);
+  // Charger la liste des villes
+  Future<void> _loadVilles() async {
     try {
-      final apiService = ApiService();
-      final response = await apiService.get(AppConstants.villesEndpoint);
-      if (response.statusCode == 200) {
-        final List<dynamic> data = response.data;
-        setState(() {
-          _villes = data.map((json) => Ville.fromJson(json)).toList();
-        });
-      }
+      final response = await _apiService.get(ApiConstants.villes);
+      final List<dynamic> data = response.data;
+      setState(() {
+        _villes = data.map((json) => Ville.fromJson(json)).toList();
+      });
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erreur chargement villes: $e')));
-    } finally {
-      setState(() => _isLoadingVilles = false);
+      print("Erreur chargement villes: $e");
     }
   }
 
-  Future<void> _fetchCommunes(String villeNom) async {
+  // Charger les communes selon la ville choisie
+  Future<void> _loadCommunes(String villeNom) async {
     setState(() {
       _isLoadingCommunes = true;
-      _selectedCommune = null;
       _communes = [];
+      _selectedCommune = null;
     });
     try {
-      final apiService = ApiService();
-      final response = await apiService.get(
-        AppConstants.communesEndpoint,
+      final response = await _apiService.get(
+        ApiConstants.communes,
         queryParameters: {'ville': villeNom},
       );
-      if (response.statusCode == 200) {
-        final List<dynamic> data = response.data;
-        setState(() {
-          _communes = data.map((json) => json['nom'].toString()).toList();
-        });
-      }
+      final List<dynamic> data = response.data;
+      setState(() {
+        _communes = data.map((json) => json['nom'].toString()).toList();
+      });
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erreur chargement communes: $e')));
+      print("Erreur chargement communes: $e");
     } finally {
       setState(() => _isLoadingCommunes = false);
     }
   }
 
+  // Sélecteur de date
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-      firstDate: DateTime(1900),
+      initialDate: DateTime(2000),
+      firstDate: DateTime(1950),
       lastDate: DateTime.now(),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: AppColors.primary),
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
           ),
           child: child!,
         );
@@ -130,50 +125,79 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _handleRegister() async {
     if (_formKey.currentState!.validate()) {
+      // Validations manuelles supplémentaires
+      if (_selectedVilleNom == null) {
+        _showError("Veuillez sélectionner une ville");
+        return;
+      }
       if (_selectedCommune == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Veuillez sélectionner une commune')),
-        );
+        _showError("Veuillez sélectionner une commune");
+        return;
+      }
+      if (_selectedGenre.isEmpty) {
+        _showError("Veuillez sélectionner votre genre");
         return;
       }
 
-      final user = User(
-        nomUtilisateur: _usernameController.text,
-        email: _emailController.text,
-        commune: _selectedCommune,
-        ville: _selectedVille,
-        dateNaissance: _dateController.text,
-        contact: _contactController.text,
-        genre: _selectedGenre,
-      );
-
-      // Ajouter code parrainage si présent (à gérer dans AuthService ou User model)
-      // Pour l'instant on passe l'objet User standard
-
       try {
-        final success = await Provider.of<AuthService>(
-          context,
-          listen: false,
-        ).register(user, _passwordController.text);
+        final authService = Provider.of<AuthService>(context, listen: false);
+        
+        final success = await authService.register(
+          nomUtilisateur: _usernameController.text,
+          email: _emailController.text,
+          password: _passwordController.text,
+          ville: _selectedVilleNom!,
+          commune: _selectedCommune!,
+          dateNaissance: _dateController.text,
+          contact: _contactController.text,
+          genre: _selectedGenre,
+          codeParrainage: _referralController.text,
+        );
 
         if (success && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Inscription réussie ! Connectez-vous.'),
-              backgroundColor: AppColors.success,
+          // Affichage Modale Succès
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              title: const Center(child: Text("Inscription Réussie !", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
+              content: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.green, size: 60),
+                  SizedBox(height: 15),
+                  Text(
+                    "Votre compte a été créé avec succès.\nVous pouvez maintenant vous connecter.",
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+              actions: [
+                Center(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    onPressed: () {
+                      Navigator.pop(ctx); // Ferme dialog
+                      Navigator.pop(context); // Retour login
+                    },
+                    child: const Text("Aller à la connexion", style: TextStyle(color: Colors.white)),
+                  ),
+                )
+              ],
             ),
           );
-          Navigator.pop(context); // Retour au login
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur inscription: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showError(e.toString().replaceAll('Exception:', ''));
       }
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
   }
 
   @override
@@ -184,276 +208,227 @@ class _RegisterScreenState extends State<RegisterScreen> {
       isLoading: authService.isLoading,
       child: Scaffold(
         backgroundColor: AppColors.light,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: BackButton(color: AppColors.primary),
+        ),
         body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 20),
-                  // Logo
-                  Center(
-                    child: Image.asset('assets/images/logo.png', height: 80),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Inscription',
-                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 28,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // --- HEADER ---
+                    const Text(
+                      'Créer un compte',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 30),
-
-                  // Champs
-                  CustomTextField(
-                    hintText: "Nom d'utilisateur *",
-                    prefixIcon: Icons.person_outline,
-                    controller: _usernameController,
-                    validator: (v) =>
-                        Validators.validateRequired(v, "Nom d'utilisateur"),
-                  ),
-                  CustomTextField(
-                    hintText: "Email *",
-                    prefixIcon: Icons.email_outlined,
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: Validators.validateEmail,
-                  ),
-                  CustomTextField(
-                    hintText: "Mot de passe *",
-                    prefixIcon: Icons.lock_outline,
-                    obscureText: true,
-                    controller: _passwordController,
-                    validator: Validators.validatePassword,
-                  ),
-                  CustomTextField(
-                    hintText: "Confirmer mot de passe *",
-                    prefixIcon: Icons.lock_outline,
-                    obscureText: true,
-                    controller: _confirmPasswordController,
-                    validator: (v) => Validators.validateConfirmPassword(
-                      v,
-                      _passwordController.text,
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Rejoignez la communauté PubCash',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.textMuted),
                     ),
-                  ),
+                    const SizedBox(height: 30),
 
-                  const SizedBox(height: 10),
+                    // --- CHAMPS TEXTE ---
+                    CustomTextField(
+                      hintText: "Nom d'utilisateur",
+                      prefixIcon: Icons.person_outline,
+                      controller: _usernameController,
+                      validator: (v) => Validators.validateRequired(v, "Nom d'utilisateur"),
+                    ),
+                    CustomTextField(
+                      hintText: "Email",
+                      prefixIcon: Icons.email_outlined,
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      validator: Validators.validateEmail,
+                    ),
+                    CustomTextField(
+                      hintText: "Mot de passe",
+                      prefixIcon: Icons.lock_outline,
+                      obscureText: true,
+                      controller: _passwordController,
+                      validator: Validators.validatePassword,
+                    ),
+                    CustomTextField(
+                      hintText: "Confirmer mot de passe",
+                      prefixIcon: Icons.lock_outline,
+                      obscureText: true,
+                      controller: _confirmPasswordController,
+                      validator: (v) => Validators.validateConfirmPassword(v, _passwordController.text),
+                    ),
 
-                  // Date Naissance
-                  CustomTextField(
-                    hintText: "Date de naissance",
-                    prefixIcon: Icons.calendar_today,
-                    controller: _dateController,
-                    readOnly: true,
-                    onTap: () => _selectDate(context),
-                  ),
+                    // --- DATE NAISSANCE ---
+                    GestureDetector(
+                      onTap: () => _selectDate(context),
+                      child: AbsorbPointer(
+                        child: CustomTextField(
+                          controller: _dateController,
+                          hintText: 'Date de naissance',
+                          prefixIcon: Icons.calendar_today,
+                          validator: (v) => Validators.validateRequired(v, 'Date'),
+                        ),
+                      ),
+                    ),
 
-                  // Contact
-                  CustomTextField(
-                    hintText: "Contact",
-                    prefixIcon: Icons.phone_android,
-                    controller: _contactController,
-                    keyboardType: TextInputType.phone,
-                  ),
+                    // --- CONTACT ---
+                    CustomTextField(
+                      hintText: "Téléphone",
+                      prefixIcon: Icons.phone_android,
+                      controller: _contactController,
+                      keyboardType: TextInputType.phone,
+                      validator: Validators.validatePhone,
+                    ),
 
-                  // Genre Dropdown
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.2),
-                          spreadRadius: 2,
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
+                    // --- DROPDOWN VILLE ---
+                    _buildDropdownContainer(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedVilleNom,
+                          hint: const Text("Choisir une ville"),
+                          isExpanded: true,
+                          icon: const Icon(Icons.location_city, color: AppColors.primary),
+                          items: _villes.map((v) => DropdownMenuItem(value: v.nom, child: Text(v.nom))).toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedVilleNom = val;
+                              _selectedCommune = null; // Reset commune
+                            });
+                            if (val != null) _loadCommunes(val);
+                          },
+                        ),
+                      ),
+                    ),
+
+                    // --- DROPDOWN COMMUNE ---
+                    _buildDropdownContainer(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedCommune,
+                          hint: Text(_isLoadingCommunes ? "Chargement..." : "Choisir une commune"),
+                          isExpanded: true,
+                          icon: const Icon(Icons.map, color: AppColors.primary),
+                          items: _communes.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                          onChanged: _selectedVilleNom == null ? null : (val) => setState(() => _selectedCommune = val),
+                        ),
+                      ),
+                    ),
+
+                    // --- GENRE ---
+                    const Padding(
+                      padding: EdgeInsets.only(left: 5, bottom: 5),
+                      child: Text("Genre", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('Homme'),
+                            value: 'Homme',
+                            groupValue: _selectedGenre,
+                            activeColor: AppColors.primary,
+                            contentPadding: EdgeInsets.zero,
+                            onChanged: (val) => setState(() => _selectedGenre = val!),
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('Femme'),
+                            value: 'Femme',
+                            groupValue: _selectedGenre,
+                            activeColor: AppColors.primary,
+                            contentPadding: EdgeInsets.zero,
+                            onChanged: (val) => setState(() => _selectedGenre = val!),
+                          ),
                         ),
                       ],
                     ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedGenre,
-                        hint: const Text("Genre"),
-                        isExpanded: true,
-                        icon: const Icon(
-                          Icons.arrow_drop_down,
-                          color: AppColors.primary,
-                        ),
-                        items: ['Homme', 'Femme'].map((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
-                        onChanged: (newValue) {
-                          setState(() {
-                            _selectedGenre = newValue;
-                          });
-                        },
-                      ),
-                    ),
-                  ),
 
-                  // Ville Dropdown
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withValues(alpha: 0.2),
-                          spreadRadius: 2,
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
+                    // --- PARRAINAGE ---
+                    CustomTextField(
+                      hintText: "Code Parrainage (Optionnel)",
+                      prefixIcon: Icons.card_giftcard,
+                      controller: _referralController,
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // --- BOUTON INSCRIPTION ---
+                    CustomButton(
+                      text: "S'INSCRIRE",
+                      onPressed: _handleRegister,
+                    ),
+
+                    const SizedBox(height: 20),
+                    const Text("Ou inscrivez-vous avec", textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted)),
+                    const SizedBox(height: 15),
+
+                    // --- BOUTONS SOCIAUX ---
+                    SocialLoginButtons(
+                      onFacebookTap: () async {
+                        try {
+                          await authService.loginWithFacebook();
+                          // La navigation vers complete profile se fait via main.dart si Exception levée
+                        } catch (e) { /* Géré ailleurs */ }
+                      },
+                      onGoogleTap: () async {
+                        try {
+                          await authService.loginWithGoogle();
+                        } catch (e) { /* Géré ailleurs */ }
+                      },
+                    ),
+
+                    const SizedBox(height: 20),
+                    
+                    // --- LIEN CONNEXION ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text("Déjà inscrit ? ", style: TextStyle(color: AppColors.textMuted)),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Text("Se connecter", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
-                    child: _isLoadingVilles
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(12),
-                              child: CircularProgressIndicator(),
-                            ),
-                          )
-                        : DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _selectedVille,
-                              hint: const Text("Choisir une ville"),
-                              isExpanded: true,
-                              icon: const Icon(
-                                Icons.location_city,
-                                color: AppColors.primary,
-                              ),
-                              items: _villes.map((Ville ville) {
-                                return DropdownMenuItem<String>(
-                                  value: ville.nom,
-                                  child: Text(ville.nom),
-                                );
-                              }).toList(),
-                              onChanged: (newValue) {
-                                setState(() {
-                                  _selectedVille = newValue;
-                                  _fetchCommunes(newValue!);
-                                });
-                              },
-                            ),
-                          ),
-                  ),
-
-                  // Commune Dropdown
-                  Container(
-                    margin: const EdgeInsets.symmetric(vertical: 10),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.2),
-                          spreadRadius: 2,
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: _isLoadingCommunes
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(12),
-                              child: CircularProgressIndicator(),
-                            ),
-                          )
-                        : DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: _selectedCommune,
-                              hint: const Text("Choisir une commune *"),
-                              isExpanded: true,
-                              icon: const Icon(
-                                Icons.map,
-                                color: AppColors.primary,
-                              ),
-                              items: _communes.map((String nom) {
-                                return DropdownMenuItem<String>(
-                                  value: nom,
-                                  child: Text(nom),
-                                );
-                              }).toList(),
-                              onChanged: _selectedVille == null
-                                  ? null
-                                  : (newValue) {
-                                      setState(() {
-                                        _selectedCommune = newValue;
-                                      });
-                                    },
-                            ),
-                          ),
-                  ),
-
-                  // Code Parrainage
-                  CustomTextField(
-                    hintText: "Code Parrainage (Optionnel)",
-                    prefixIcon: Icons.card_giftcard,
-                    controller: _referralController,
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  CustomButton(
-                    text: "CRÉER MON COMPTE",
-                    onPressed: _handleRegister,
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  const Text(
-                    "Ou inscrivez-vous avec",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textMuted),
-                  ),
-
-                  const SizedBox(height: 15),
-
-                  SocialLoginButtons(
-                    onFacebookTap: () => authService.loginWithFacebook(),
-                    onGoogleTap: () => authService.loginWithGoogle(),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        "Déjà inscrit ? ",
-                        style: TextStyle(color: AppColors.textMuted),
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: const Text(
-                          "Se connecter",
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDropdownContainer({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 15),
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }

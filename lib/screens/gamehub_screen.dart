@@ -1,8 +1,7 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:pub_cash_mobile/models/game.dart';
-import 'package:pub_cash_mobile/services/game_service.dart';
-import 'package:pub_cash_mobile/utils/app_colors.dart';
+import '../models/game.dart';
+import '../services/game_service.dart';
+import '../utils/colors.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class GamehubScreen extends StatefulWidget {
@@ -72,7 +71,9 @@ class _GamehubScreenState extends State<GamehubScreen> {
             await launchUrl(url, mode: LaunchMode.externalApplication);
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Impossible d\'ouvrir le lien: ${game.lienJeu}')),
+              SnackBar(
+                content: Text('Impossible d\'ouvrir le lien: ${game.lienJeu}'),
+              ),
             );
           }
         },
@@ -81,9 +82,11 @@ class _GamehubScreenState extends State<GamehubScreen> {
           children: [
             Expanded(
               child: Image.network(
-                game.imageUrl ?? 'https://via.placeholder.com/300x200.png?text=PubCash+Game',
+                game.imageUrl ??
+                    'https://via.placeholder.com/300x200.png?text=PubCash+Game',
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.gamepad, size: 50, color: Colors.grey),
+                errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.gamepad, size: 50, color: Colors.grey),
               ),
             ),
             Padding(

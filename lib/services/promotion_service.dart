@@ -1,67 +1,60 @@
 import '../models/promotion.dart';
 import 'api_service.dart';
+import '../utils/api_constants.dart'; // N'oublie pas d'importer tes constantes
 
 class PromotionService {
   final ApiService _apiService = ApiService();
 
-  // Récupérer les promotions/vidéos avec filtre
   Future<List<Promotion>> getPromotions({String filter = 'toutes'}) async {
     try {
-      print('Fetching promotions with filter: $filter');
+      // Utilise la constante pour être sûr de l'URL
       final response = await _apiService.get(
-        '/promotions',
+        ApiConstants.promotions, 
         queryParameters: {'filter': filter},
       );
 
-      print('Response status: ${response.statusCode}');
-      print('Response data length: ${(response.data as List).length}');
-      // print('Response data: ${response.data}'); // Décommenter si besoin de voir tout le JSON
-
       final List<dynamic> data = response.data;
       return data.map((json) => Promotion.fromJson(json)).toList();
     } catch (e) {
-      print('Error fetching promotions: $e');
+      print('Erreur fetching promotions: $e');
       rethrow;
     }
   }
 
-  // Obtenir les gains de l'utilisateur
+  // CORRECTION ICI
   Future<Map<String, dynamic>> getEarnings() async {
     try {
-      final response = await _apiService.get('/promotions/utilisateur/gains');
+      // Utilise la constante définie dans ApiConstants (/promotions/utilisateur/gains)
+      final response = await _apiService.get(ApiConstants.userEarnings); 
       return response.data;
     } catch (e) {
-      rethrow;
+      print('Erreur fetching earnings: $e');
+      return {'total': 0, 'per_pack': []};
     }
   }
 
-  // Like une vidéo
   Future<void> likePromotion(int promoId) async {
-    try {
-      await _apiService.post('/promotions/$promoId/like');
-    } catch (e) {
-      rethrow;
-    }
+    await _apiService.post('${ApiConstants.promotions}/$promoId/like');
   }
 
-  // Partager une vidéo
   Future<void> sharePromotion(int promoId) async {
-    try {
-      await _apiService.post('/promotions/$promoId/partage');
-    } catch (e) {
-      rethrow;
-    }
+    await _apiService.post('${ApiConstants.promotions}/$promoId/partage');
   }
-
-  // Récupérer les promotions/vidéos pour l'utilisateur connecté
-  Future<List<Promotion>> getUserPromotions() async {
+// === NOUVEAU : SOUMETTRE QUIZ ===
+  Future<bool> submitQuiz(int gameId, String reponse) async {
     try {
-      final response = await _apiService.get('/promotions/utilisateur/videos');
-
-      final List<dynamic> data = response.data;
-      return data.map((json) => Promotion.fromJson(json)).toList();
+      // Endpoint basé sur GameController.js: exports.submitQuiz
+      final response = await _apiService.post(
+        '/games/quiz/submit', // Assure-toi que c'est la bonne route dans ton router.js
+        data: {
+          'gameId': gameId,
+          'reponse': reponse,
+        },
+      );
+      return response.data['success'] == true;
     } catch (e) {
-      rethrow;
+      print("Erreur submit quiz: $e");
+      return false;
     }
   }
 }

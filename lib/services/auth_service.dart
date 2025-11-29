@@ -4,7 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'api_service.dart';
 import '../models/user.dart';
-import '../utils/constants.dart';
+import '../utils/api_constants.dart';
 import '../utils/exceptions.dart';
 
 class AuthService with ChangeNotifier {
@@ -22,20 +22,39 @@ class AuthService with ChangeNotifier {
   bool get isAuthenticated => _token != null;
   bool get requiresProfileCompletion => _requiresProfileCompletion;
 
-  Future<bool> register(User user, String password) async {
+  // --- 1. INSCRIPTION COMPLÈTE (Corrige pour matcher RegisterUser.js) ---
+  Future<bool> register({
+    required String nomUtilisateur,
+    required String email,
+    required String password,
+    required String ville,
+    required String commune,
+    required String dateNaissance,
+    String? contact,
+    String? genre,
+    String? codeParrainage,
+  }) async {
     try {
       _setLoading(true);
 
-      final data = user.toJson();
-      data['mot_de_passe'] = password;
+      // Construction manuelle du JSON pour être sûr des clés
+      final data = {
+        'nom_utilisateur': nomUtilisateur,
+        'email': email,
+        'mot_de_passe': password,
+        'ville': ville,
+        'commune': commune,
+        'date_naissance': dateNaissance,
+        'contact': contact,
+        'genre': genre,
+        'code_parrainage': codeParrainage,
+      };
 
-      // Nettoyage des champs nuls ou vides
-      data.removeWhere(
-        (key, value) => value == null || value.toString().isEmpty,
-      );
+      // Nettoyage des valeurs nulles
+      data.removeWhere((key, value) => value == null || value.toString().isEmpty);
 
       final response = await _apiService.post(
-        AppConstants.registerEndpoint,
+        ApiConstants.register,
         data: data,
       );
 
@@ -50,28 +69,41 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  // Mise à jour du profil
-  Future<void> updateProfile({
+  // --- 2. MISE A JOUR PROFIL SÉCURISÉE (Avec mot de passe actuel) ---
+  Future<void> updateUserProfile({
     required String nom,
     required String prenom,
-    required String telephone,
+    required String nomUtilisateur,
+    required String contact,
+    required String currentPassword, // OBLIGATOIRE Côté Backend
+    String? newPassword,
   }) async {
     try {
       _setLoading(true);
 
-      final response = await _apiService.patch(
-        '/auth/utilisateur/profile', // Endpoint supposé
-        data: {
-          'nom_utilisateur': nom,
-          'contact': telephone,
-        },
+      final data = {
+        'nom': nom,
+        'prenom': prenom,
+        'nom_utilisateur': nomUtilisateur,
+        'contact': contact,
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      };
+
+      // Si pas de nouveau mot de passe, on retire la clé
+      if (newPassword == null || newPassword.isEmpty) {
+        data.remove('newPassword');
+      }
+
+      // Utilise PUT sur /api/user/profile (voir ApiConstants.updateProfile)
+      await _apiService.put(
+        ApiConstants.updateProfile, // Assure-toi que c'est '/auth/utilisateur/profile' ou '/user/profile' selon tes routes
+        data: data,
       );
 
-      // Mettre à jour l'utilisateur local avec les nouvelles données
-      if (response.statusCode == 200 && response.data != null) {
-        _currentUser = User.fromJson(response.data);
-        notifyListeners();
-      }
+      // Recharger les données locales pour voir les modifs immédiatement
+      await refreshUserProfile();
+
     } catch (e) {
       rethrow;
     } finally {
@@ -79,19 +111,32 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  // Connexion Classique
+  // --- 3. REFRESH PROFILE (Récupérer points, solde, filleuls) ---
+  Future<void> refreshUserProfile() async {
+    if (_token == null) return;
+
+    try {
+      // Appel à /user/profile
+      final response = await _apiService.get(ApiConstants.userProfile);
+
+      if (response.statusCode == 200 && response.data != null) {
+        _currentUser = User.fromJson(response.data);
+        notifyListeners();
+        print("✅ Profil mis à jour: ${_currentUser?.nomUtilisateur} (${_currentUser?.points} pts)");
+      }
+    } catch (e) {
+      print("⚠️ Impossible de rafraîchir le profil: $e");
+    }
+  }
+
+  // --- 4. LOGIN CLASSIQUE ---
   Future<void> login(String email, String password) async {
     try {
       _setLoading(true);
-
       final response = await _apiService.post(
-        AppConstants.loginEndpoint,
-        data: {
-          'identifier': email,
-          'password': password,
-        },
+        ApiConstants.login,
+        data: {'identifier': email, 'password': password},
       );
-
       await _handleAuthResponse(response.data);
     } catch (e) {
       rethrow;
@@ -100,24 +145,18 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  // Connexion Google
+  // --- 5. SOCIAL LOGIN (Google) ---
   Future<void> loginWithGoogle() async {
     try {
       _setLoading(true);
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser != null) {
-        final GoogleSignInAuthentication googleAuth =
-            await googleUser.authentication;
-
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
         final response = await _apiService.post(
-          AppConstants.googleAuthEndpoint,
-          data: {
-            'accessToken': googleAuth.accessToken,
-            // 'idToken': googleAuth.idToken, // Si nécessaire côté backend
-          },
+          ApiConstants.googleAuth,
+          data: {'accessToken': googleAuth.accessToken},
         );
-
         await _handleAuthResponse(response.data);
       }
     } catch (e) {
@@ -127,7 +166,7 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  // Connexion Facebook
+  // --- 6. SOCIAL LOGIN (Facebook) ---
   Future<void> loginWithFacebook() async {
     try {
       _setLoading(true);
@@ -135,12 +174,10 @@ class AuthService with ChangeNotifier {
 
       if (result.status == LoginStatus.success) {
         final AccessToken accessToken = result.accessToken!;
-
         final response = await _apiService.post(
-          AppConstants.facebookAuthEndpoint,
+          ApiConstants.facebookAuth,
           data: {'accessToken': accessToken.token},
         );
-
         await _handleAuthResponse(response.data);
       }
     } catch (e) {
@@ -150,16 +187,14 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  // Déconnexion
+  // --- 7. LOGOUT ---
   Future<void> logout() async {
-    await _secureStorage.delete(key: AppConstants.keyAccessToken);
-    await _secureStorage.delete(key: AppConstants.keyRefreshToken);
-    _apiService.clearAuthToken();
+    await _secureStorage.delete(key: 'access_token');
+    await _secureStorage.delete(key: 'refresh_token');
     _currentUser = null;
     _token = null;
     _requiresProfileCompletion = false;
 
-    // Déconnexion sociale si nécessaire
     if (await _googleSignIn.isSignedIn()) {
       await _googleSignIn.signOut();
     }
@@ -168,63 +203,46 @@ class AuthService with ChangeNotifier {
     notifyListeners();
   }
 
-  // Traitement de la réponse d'auth
- Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
-    print("🔍 Analyse de la réponse Auth: $data"); // Pour voir ce qui arrive vraiment
+  // --- 8. TRAITEMENT RÉPONSE AUTH ---
+  Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
+    print("🔍 Auth Response: $data");
 
-    // 1. SÉCURISATION TOTALE DES TOKENS (Convertit tout en String, même les objets)
-    // On utilise ?.toString() pour éviter le crash si c'est un Map ou null
     final String accessToken = data['accessToken']?.toString() ?? '';
     final String refreshToken = data['refreshToken']?.toString() ?? '';
 
     if (accessToken.isEmpty) {
-      throw Exception("Token d'accès manquant dans la réponse API");
+      throw Exception("Token manquant");
     }
 
-    // 2. Sauvegarde
-    await _secureStorage.write(
-      key: AppConstants.keyAccessToken,
-      value: accessToken,
-    );
-    await _secureStorage.write(
-      key: AppConstants.keyRefreshToken,
-      value: refreshToken,
-    );
-
+    await _secureStorage.write(key: 'access_token', value: accessToken);
+    await _secureStorage.write(key: 'refresh_token', value: refreshToken);
     _token = accessToken;
-    _apiService.setAuthToken(accessToken);
 
-    // 3. Traitement de l'utilisateur
     if (data['user'] != null) {
       try {
-        // On vérifie que 'user' est bien une Map avant de l'envoyer
-        if (data['user'] is Map<String, dynamic>) {
-           _currentUser = User.fromJson(data['user']);
-        } else {
-           print("⚠️ ATTENTION: data['user'] n'est pas un objet JSON valide");
-        }
+        _currentUser = User.fromJson(data['user']);
       } catch (e) {
         print("❌ Erreur parsing User: $e");
-        // On ne rethrow pas ici pour ne pas bloquer le login si juste le profil plante
       }
 
-      if (_currentUser != null && _currentUser!.isSocialUser && !isProfileComplete) {
-        _requiresProfileCompletion = true;
-        // Note: On ne throw pas forcément ici si on veut laisser l'utilisateur entrer
-        // throw IncompleteProfileException(); 
+      // Vérification profile incomplet (Social Login)
+      // On utilise le booléen 'profileCompleted' envoyé par le backend s'il existe, sinon logique locale
+      bool isProfileCompletedBackend = data['profileCompleted'] == true;
+      
+      if (_currentUser != null && _currentUser!.isSocialUser && !isProfileCompletedBackend) {
+         _requiresProfileCompletion = true;
       } else {
-        _requiresProfileCompletion = false;
+         _requiresProfileCompletion = false;
       }
     }
-
     notifyListeners();
 
-    if (!isProfileComplete) {
+    if (_requiresProfileCompletion) {
       throw IncompleteProfileException();
     }
   }
 
-  // Complétion de profil
+  // --- 9. COMPLETION PROFIL (Page dédiée) ---
   Future<void> completeProfile({
     required String commune,
     required String dateNaissance,
@@ -233,9 +251,8 @@ class AuthService with ChangeNotifier {
   }) async {
     try {
       _setLoading(true);
-
       final response = await _apiService.patch(
-        '/auth/utilisateur/complete-profile',
+        ApiConstants.completeProfile, 
         data: {
           'commune_choisie': commune,
           'date_naissance': dateNaissance,
@@ -244,23 +261,15 @@ class AuthService with ChangeNotifier {
         },
       );
 
-      // Mise à jour du token et de l'utilisateur
       if (response.data['token'] != null) {
-        await _secureStorage.write(
-          key: AppConstants.keyAccessToken,
-          value: response.data['token'],
-        );
+        await _secureStorage.write(key: 'access_token', value: response.data['token']);
         _token = response.data['token'];
-        _apiService.setAuthToken(_token!);
       }
 
-      // Mettre à jour l'utilisateur localement
       if (response.data['user'] != null) {
         _currentUser = User.fromJson(response.data['user']);
-        // Une fois complété, on met à jour l'état
         _requiresProfileCompletion = false;
       }
-
       notifyListeners();
     } catch (e) {
       rethrow;
@@ -269,31 +278,31 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  bool get isProfileComplete {
-    if (_currentUser == null) return false;
-
-    // Si l'utilisateur n'est pas un utilisateur social (inscription normale),
-    // son profil est déjà complet (tous les champs ont été remplis à l'inscription)
-    if (!_currentUser!.isSocialUser) {
-      return true;
-    }
-
-    // Pour les utilisateurs sociaux (Google/Facebook),
-    // vérifier si les champs obligatoires sont présents
-    return _currentUser!.commune != null &&
-        _currentUser!.commune!.isNotEmpty &&
-        _currentUser!.contact != null &&
-        _currentUser!.contact!.isNotEmpty &&
-        _currentUser!.dateNaissance != null &&
-        _currentUser!.dateNaissance!.isNotEmpty &&
-        _currentUser!.genre != null &&
-        _currentUser!.genre!.isNotEmpty;
-  }
-
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
   }
-
-  void init() {}
-}
+  Future<void> init() async {
+    try {
+      // 1. Lire le token stocké
+      final accessToken = await _secureStorage.read(key: 'access_token');
+      
+      if (accessToken != null && accessToken.isNotEmpty) {
+        _token = accessToken;
+        // 2. Si on a un token, on essaie de charger le profil pour vérifier s'il est valide
+        await refreshUserProfile();
+        
+        // Si refreshUserProfile a réussi, _currentUser sera rempli
+        // Si le token est expiré, l'API renverra 401 et refreshUserProfile gère l'erreur
+      }
+    } catch (e) {
+      print("Erreur lors de l'initialisation auth: $e");
+      // En cas de pépin, on déconnecte pour être propre
+      await logout();
+    } finally {
+      // On signale que le chargement initial est fini
+      // (Si tu as une variable _isInitializing, c'est le moment de la passer à false)
+      notifyListeners();
+    }
+  }
+} // Fin de la classe AuthService

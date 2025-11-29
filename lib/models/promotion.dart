@@ -1,4 +1,4 @@
-import 'quiz.dart';
+import 'dart:convert'; // Nécessaire pour jsonDecode
 
 class Promotion {
   final int id;
@@ -8,8 +8,14 @@ class Promotion {
   final String? thumbnailUrl;
   final int remunerationPack;
   final int duree;
+  
+  // Champs Quiz / Game
+  final int? gameId;
   final String? gameType;
-  final Quiz? quiz;
+  final String? question;
+  final List<String>? reponses; // On va convertir la string JSON en Liste
+  final String? bonneReponse;
+  final int? pointsRecompense;
 
   Promotion({
     required this.id,
@@ -19,40 +25,52 @@ class Promotion {
     this.thumbnailUrl,
     required this.remunerationPack,
     required this.duree,
+    this.gameId,
     this.gameType,
-    this.quiz,
+    this.question,
+    this.reponses,
+    this.bonneReponse,
+    this.pointsRecompense,
   });
 
   factory Promotion.fromJson(Map<String, dynamic> json) {
+    // Gestion des réponses qui arrivent souvent sous forme de String JSON "[...]"
+    List<String> parsedReponses = [];
+    if (json['reponses'] != null) {
+      try {
+        if (json['reponses'] is String) {
+          parsedReponses = List<String>.from(jsonDecode(json['reponses']));
+        } else if (json['reponses'] is List) {
+          parsedReponses = List<String>.from(json['reponses']);
+        }
+      } catch (e) {
+        print("Erreur parsing reponses quiz: $e");
+      }
+    }
+
     return Promotion(
       id: json['id'],
       titre: json['titre'] ?? '',
       description: json['description'],
       urlVideo: json['url_video'] ?? '',
       thumbnailUrl: json['thumbnail_url'],
-      remunerationPack: json['remuneration_pack'] ?? 0,
-      duree: json['duree'] ?? 0,
+      remunerationPack: _safeInt(json['remuneration_pack']),
+      duree: _safeInt(json['duree']),
+      
+      // Mapping des champs Game venant du LEFT JOIN dans PromotionController.js
+      gameId: json['game_id'],
       gameType: json['game_type'],
-      quiz: json['quiz'] != null ? Quiz.fromJson(json['quiz']) : null,
+      question: json['question'],
+      reponses: parsedReponses.isNotEmpty ? parsedReponses : null,
+      bonneReponse: json['bonne_reponse'],
+      pointsRecompense: _safeInt(json['points_recompense']),
     );
   }
 
-  // --- Helpers pour éviter les crashs de type ---
-
-  /// Convertit n'importe quoi (String, Map, Int) en String ou null
-  static String? _safeString(dynamic value) {
-    if (value == null) return null;
-    if (value is String) return value;
-    // Si c'est un objet (Map) ou une liste, on ne crash pas, on convertit en string
-    return value.toString();
-  }
-
-  /// Convertit n'importe quoi en Int (ou 0 si échec)
   static int _safeInt(dynamic value) {
     if (value == null) return 0;
     if (value is int) return value;
     if (value is String) return int.tryParse(value) ?? 0;
-    if (value is double) return value.toInt();
     return 0;
   }
 }
