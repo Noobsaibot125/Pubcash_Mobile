@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart'; // <--- 1. IMPORT OBLIGATOIRE
 import 'services/auth_service.dart';
-import 'services/notification_service.dart'; // <--- Import Ajouté
+import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 import 'utils/colors.dart';
 import 'screens/auth/login_screen.dart';
@@ -13,7 +14,16 @@ void main() async {
   // S'assurer que les liaisons Flutter sont prêtes
   WidgetsFlutterBinding.ensureInitialized();
   
+  // 2. INITIALISER FIREBASE EN PREMIER (Indispensable pour éviter l'écran blanc)
+  try {
+    await Firebase.initializeApp();
+    print("✅ Firebase connectée !");
+  } catch (e) {
+    print("❌ Erreur Firebase: $e");
+  }
+
   // Initialiser le service de notifications (Firebase + Local)
+  // Maintenant que Firebase est prêt, on peut lancer ce service sans crash
   await NotificationService().initialiser(); 
 
   runApp(const MyApp());
@@ -48,9 +58,7 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
 
-    // Si l'utilisateur est authentifié (token présent)
     if (authService.isAuthenticated) {
-      // Si on charge encore les infos utilisateur (init en cours)
       if (authService.currentUser == null && authService.isLoading) {
         return const Scaffold(
           body: Center(
@@ -59,16 +67,13 @@ class AuthWrapper extends StatelessWidget {
         );
       }
 
-      // Si le profil nécessite d'être complété (Social Login incomplet)
       if (authService.requiresProfileCompletion) {
         return const CompleteSocialProfileScreen();
       }
 
-      // Sinon -> Navigation Principale
       return const MainNavigationScreen();
     }
 
-    // Sinon -> Login
     return const LoginScreen();
   }
 }

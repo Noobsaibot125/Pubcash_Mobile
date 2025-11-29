@@ -3,12 +3,13 @@ import 'package:provider/provider.dart';
 import '../services/promotion_service.dart';
 import '../services/video_service.dart';
 import '../services/auth_service.dart';
-import '../services/notification_service.dart'; // <--- Import Ajouté
+import '../services/notification_service.dart';
 import '../models/promotion.dart';
 import '../utils/colors.dart';
 import '../widgets/video_card.dart';
 import 'video_player_screen.dart';
-import 'notifications_screen.dart'; // <--- Import Ajouté
+import 'notifications_screen.dart';
+import 'profile_screen.dart'; // Assurez-vous d'importer votre écran de profil
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -35,6 +36,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String _filter = 'toutes';
   bool _isInit = true;
 
+  // NOUVEAU : Pour cacher/montrer le solde
+  bool _showBalance = true;
+
   @override
   void didChangeDependencies() {
     if (_isInit) {
@@ -54,23 +58,23 @@ class _HomeScreenState extends State<HomeScreen> {
       // 1. Charger profil user
       await authService.refreshUserProfile();
       
-      // 2. Charger les données API en parallèle pour gagner du temps
+      // 2. Charger les données API en parallèle (en passant le filtre)
       final results = await Future.wait([
         _promotionService.getPromotions(filter: _filter),
         _promotionService.getEarnings(),
-        NotificationService().getUnreadCount() // Récupérer le nombre de notifs non lues
+        NotificationService().getUnreadCount()
       ]);
 
       final promos = results[0] as List<Promotion>;
       final earnings = results[1] as Map<String, dynamic>;
-      final unread = results[2] as int; // Cast du résultat notif
+      final unread = results[2] as int;
       
       if (mounted) {
         setState(() {
           _promotions = promos;
           _earnings = earnings;
           _points = authService.currentUser?.points ?? 0;
-          _unreadCount = unread; // Mise à jour du badge
+          _unreadCount = unread;
           _loading = false;
         });
       }
@@ -94,10 +98,23 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Helper pour construire l'URL de l'image de profil
+  String? _getProfileImageUrl(String? photoUrl) {
+    if (photoUrl == null || photoUrl.isEmpty) return null;
+    if (photoUrl.startsWith('http')) {
+      return "$photoUrl?v=${DateTime.now().millisecondsSinceEpoch}";
+    }
+    // Remplacez par votre URL de base (ex: http://192.168.1.XX:5000)
+    // Assurez-vous que cette URL est accessible depuis le téléphone
+    const String baseUrl = "http://192.168.1.15:5000"; 
+    return "$baseUrl/uploads/profile/$photoUrl?v=${DateTime.now().millisecondsSinceEpoch}";
+  }
+
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
     final user = authService.currentUser;
+    final photoUrl = _getProfileImageUrl(user?.photoUrl);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -113,18 +130,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 backgroundColor: Colors.white,
                 elevation: 2,
                 shadowColor: Colors.black.withOpacity(0.1),
+                // --- MODIFICATION 1 : LOGO A GAUCHE ---
                 title: Row(
                   children: [
-                    Container(
+                    Image.asset(
+                      'assets/images/logo.png',
+                      height: 40, 
                       width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Center(
-                        child: Text('PC', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                      ),
+                      fit: BoxFit.contain,
+                      errorBuilder: (c, o, s) => const Icon(Icons.broken_image, color: Colors.grey),
                     ),
                     const SizedBox(width: 12),
                     Column(
@@ -138,49 +152,63 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 actions: [
-                  // === MODIFICATION ICI : Icône avec Badge ===
+                  // --- NOTIFICATIONS ---
                   Stack(
+                    alignment: Alignment.center,
                     children: [
                       IconButton(
                         icon: const Icon(Icons.notifications_outlined, color: AppColors.textDark),
                         onPressed: () {
-                          // Navigation vers l'écran de notifications
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (context) => const NotificationsScreen()),
-                          ).then((_) {
-                            // Au retour, on rafraîchit les données (pour enlever le badge si lu)
-                            _loadData(); 
-                          });
+                          ).then((_) => _loadData());
                         },
                       ),
-                      // Badge Rouge si notifications non lues > 0
                       if (_unreadCount > 0)
                         Positioned(
                           right: 8,
                           top: 8,
                           child: Container(
                             padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            constraints: const BoxConstraints(
-                              minWidth: 16,
-                              minHeight: 16,
-                            ),
+                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                             child: Text(
                               '$_unreadCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                               textAlign: TextAlign.center,
                             ),
                           ),
                         ),
                     ],
+                  ),
+
+                  // --- MODIFICATION 2 : PROFIL UTILISATEUR ---
+                  GestureDetector(
+                    onTap: () {
+                      // Navigation vers la page de profil
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 15.0, left: 5.0),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.orange, width: 2), // Cercle vert/orange autour
+                        ),
+                        child: CircleAvatar(
+                          radius: 18,
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
+                          child: photoUrl == null 
+                              ? const Icon(Icons.person, color: Colors.grey, size: 20) 
+                              : null,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -228,14 +256,36 @@ class _HomeScreenState extends State<HomeScreen> {
                               ],
                             ),
                             const SizedBox(height: 12),
+                            
+                            // --- MODIFICATION 3 : SOLDE MASQUÉ / OEIL ---
                             Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text('${_earnings['total'] ?? 0}', style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold, height: 1)),
-                                const SizedBox(width: 8),
-                                const Padding(
-                                  padding: EdgeInsets.only(bottom: 4),
-                                  child: Text('FCFA', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Text(
+                                      _showBalance ? '${_earnings['total'] ?? 0}' : '••••',
+                                      style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold, height: 1),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    if (_showBalance)
+                                      const Text('FCFA', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                                IconButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _showBalance = !_showBalance;
+                                    });
+                                  },
+                                  icon: Icon(
+                                    _showBalance ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                    color: Colors.white.withOpacity(0.9),
+                                    size: 28,
+                                  ),
                                 ),
                               ],
                             ),
@@ -247,13 +297,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 28),
 
                     // === FILTRES CIRCULAIRES ===
+                    // --- MODIFICATION 4 : FILTRAGE ---
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           _buildFilterIcon(Icons.home_rounded, 'Tous', 'toutes', const Color(0xFFFF6B35)),
-                          _buildFilterIcon(Icons.attach_money, 'Argent', 'agent', const Color(0xFFC0C0C0)),
+                          _buildFilterIcon(Icons.attach_money, 'Argent', 'argent', const Color(0xFFC0C0C0)), // 'argent' au lieu de 'agent'
                           _buildFilterIcon(Icons.workspace_premium, 'Gold', 'gold', const Color(0xFFFFD700)),
                           _buildFilterIcon(Icons.diamond, 'Diamant', 'diamant', const Color(0xFF00BCD4)),
                           _buildFilterIcon(Icons.location_on, 'Commune', 'ma_commune', const Color(0xFF9C27B0)),

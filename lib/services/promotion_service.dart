@@ -68,6 +68,15 @@ class PromotionService {
       return [];
     }
   }
+  Future<List<dynamic>> getInteractionHistory() async {
+    try {
+      final response = await _apiService.get('/promotions/historique');
+      return response.data;
+    } catch (e) {
+      print("Erreur historique interactions: $e");
+      return [];
+    }
+  }
 
   // === NOUVEAU : DEMANDE DE RETRAIT ===
   Future<void> requestWithdraw({

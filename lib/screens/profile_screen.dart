@@ -514,8 +514,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authService = Provider.of<AuthService>(context);
     final user = authService.currentUser;
 
-    if (user == null)
+    if (user == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    // ASTUCE POUR FORCER LE RAFRAICHISSEMENT DE L'IMAGE
+    // On ajoute un timestamp si une URL existe pour éviter le cache persistant après modif
+    String? displayPhotoUrl;
+    if (user.photoUrl != null && user.photoUrl!.isNotEmpty) {
+       // On vérifie si l'URL contient déjà des paramètres
+       final separator = user.photoUrl!.contains('?') ? '&' : '?';
+       displayPhotoUrl = "${user.photoUrl}$separator v=${DateTime.now().millisecondsSinceEpoch}";
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -527,8 +537,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
-        automaticallyImplyLeading:
-            false, // Enlève la flèche retour si c'est un tab
+        automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -536,27 +545,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             const SizedBox(height: 20),
 
-            // --- AVATAR AVEC MODIFICATION ---
+            // --- AVATAR ---
             GestureDetector(
-              onTap: _handleImagePick, // Au clic sur la photo
+              onTap: _handleImagePick,
               child: Stack(
                 alignment: Alignment.bottomRight,
                 children: [
                   Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.green,
-                        width: 3,
-                      ), // Bordure verte comme sur l'image
+                      border: Border.all(color: Colors.green, width: 3),
                     ),
                     child: CircleAvatar(
                       radius: 50,
-                      backgroundImage: NetworkImage(
-                        user.photoUrl ?? 'https://via.placeholder.com/150',
-                      ),
-                      onBackgroundImageError: (_, __) =>
-                          const Icon(Icons.person),
+                      backgroundColor: Colors.grey[200],
+                      // Si pas d'image, on affiche rien (la couleur de fond) ou une icone
+                      backgroundImage: displayPhotoUrl != null 
+                          ? NetworkImage(displayPhotoUrl) 
+                          : null,
+                      child: displayPhotoUrl == null 
+                          ? const Icon(Icons.person, size: 50, color: Colors.grey) 
+                          : null,
                     ),
                   ),
                   Container(

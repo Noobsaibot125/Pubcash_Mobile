@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http_parser/http_parser.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'api_service.dart';
 import 'package:dio/dio.dart';
+import 'dart:io';
 import '../models/user.dart';
 import '../utils/api_constants.dart';
 import '../utils/exceptions.dart';
@@ -120,22 +122,34 @@ class AuthService with ChangeNotifier {
   }
 
   // --- 2.1 UPLOAD IMAGE PROFIL ---
-  Future<void> uploadProfileImage(dynamic imageFile) async {
+  Future<void> uploadProfileImage(File imageFile) async { // Utilise File au lieu de dynamic
     try {
       _setLoading(true);
 
-      // Préparation du FormData
       String fileName = imageFile.path.split('/').last;
+      
+      // Déterminer l'extension pour aider le backend
+      // Si c'est un png, on dit 'image/png', sinon 'image/jpeg' par défaut
+      String subType = fileName.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
+
       FormData formData = FormData.fromMap({
+        // "file" est bien la clé attendue par ton backend (multer.single('file'))
         "file": await MultipartFile.fromFile(
           imageFile.path,
           filename: fileName,
+          // IMPORTANT : On force le type MIME pour passer le filtre du backend
+          contentType: MediaType('image', subType), 
         ),
       });
 
+      // On envoie la requête
       await _apiService.post(ApiConstants.uploadProfileImage, data: formData);
-      await refreshUserProfile(); // Rafraîchir pour voir la nouvelle image
+      
+      // On rafraîchit le profil immédiatement
+      await refreshUserProfile(); 
+      
     } catch (e) {
+      print("Erreur upload image: $e"); // Log pour le debug
       rethrow;
     } finally {
       _setLoading(false);
