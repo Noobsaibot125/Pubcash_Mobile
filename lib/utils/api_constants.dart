@@ -32,6 +32,14 @@ class ApiConstants {
   static const String gamePuzzleStart = '/games/puzzle/start';
   static const String gamePuzzleSubmit = '/games/puzzle/submit';
 
+  // Endpoints Notifications
+  static const String notifications = '/notifications';
+  static const String notificationsUnreadCount =
+      '/notifications/non-lues/count';
+  static const String notificationsMarkRead = '/notifications/:id/lire';
+  static const String notificationsMarkAllRead = '/notifications/lire-toutes';
+  static const String notificationsToken = '/notifications/token';
+
   // Headers
   static const String authHeader = 'Authorization';
   static const String bearerPrefix = 'Bearer ';

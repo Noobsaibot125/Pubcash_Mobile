@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_service.dart';
+import 'services/notification_service.dart'; // <--- Import Ajouté
 import 'theme/app_theme.dart';
 import 'utils/colors.dart';
 import 'screens/auth/login_screen.dart';
@@ -8,7 +9,13 @@ import 'screens/auth/register_screen.dart';
 import 'screens/auth/complete_social_profile_screen.dart';
 import 'screens/main_navigation_screen.dart';
 
-void main() {
+void main() async {
+  // S'assurer que les liaisons Flutter sont prêtes
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialiser le service de notifications (Firebase + Local)
+  await NotificationService().initialiser(); 
+
   runApp(const MyApp());
 }
 

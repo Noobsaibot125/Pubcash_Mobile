@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "685742437830",
+    "project_id": "pubcash-b6739",
+    "storage_bucket": "pubcash-b6739.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:685742437830:android:6b051502aa950d4f9a2ec7",
+        "android_client_info": {
+          "package_name": "com.pubcash.pubcash_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCa9m6G1ic39Z2dQMma3j-qN0hjY9j00O8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

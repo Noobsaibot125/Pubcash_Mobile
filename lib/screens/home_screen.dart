@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 import '../services/promotion_service.dart';
 import '../services/video_service.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart'; // <--- Import Ajouté
 import '../models/promotion.dart';
 import '../utils/colors.dart';
 import '../widgets/video_card.dart';
 import 'video_player_screen.dart';
+import 'notifications_screen.dart'; // <--- Import Ajouté
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -17,11 +19,16 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final PromotionService _promotionService = PromotionService();
+  // ignore: unused_field
   final VideoService _videoService = VideoService();
 
   List<Promotion> _promotions = [];
   Map<String, dynamic> _earnings = {'total': 0};
   int _points = 0;
+  
+  // Variable pour le badge de notification
+  int _unreadCount = 0; 
+  
   bool _loading = true;
   
   // Filtre par défaut
@@ -44,17 +51,26 @@ class _HomeScreenState extends State<HomeScreen> {
     final authService = Provider.of<AuthService>(context, listen: false);
 
     try {
+      // 1. Charger profil user
       await authService.refreshUserProfile();
       
-      // On envoie le filtre actuel à l'API
-      final promos = await _promotionService.getPromotions(filter: _filter);
-      final earnings = await _promotionService.getEarnings();
+      // 2. Charger les données API en parallèle pour gagner du temps
+      final results = await Future.wait([
+        _promotionService.getPromotions(filter: _filter),
+        _promotionService.getEarnings(),
+        NotificationService().getUnreadCount() // Récupérer le nombre de notifs non lues
+      ]);
+
+      final promos = results[0] as List<Promotion>;
+      final earnings = results[1] as Map<String, dynamic>;
+      final unread = results[2] as int; // Cast du résultat notif
       
       if (mounted) {
         setState(() {
           _promotions = promos;
           _earnings = earnings;
           _points = authService.currentUser?.points ?? 0;
+          _unreadCount = unread; // Mise à jour du badge
           _loading = false;
         });
       }
@@ -122,9 +138,49 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 actions: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications_outlined, color: AppColors.textDark),
-                    onPressed: () {},
+                  // === MODIFICATION ICI : Icône avec Badge ===
+                  Stack(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.notifications_outlined, color: AppColors.textDark),
+                        onPressed: () {
+                          // Navigation vers l'écran de notifications
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+                          ).then((_) {
+                            // Au retour, on rafraîchit les données (pour enlever le badge si lu)
+                            _loadData(); 
+                          });
+                        },
+                      ),
+                      // Badge Rouge si notifications non lues > 0
+                      if (_unreadCount > 0)
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              '$_unreadCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -190,24 +246,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const SizedBox(height: 28),
 
-                    // === FILTRES CIRCULAIRES (CORRIGÉS) ===
+                    // === FILTRES CIRCULAIRES ===
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           _buildFilterIcon(Icons.home_rounded, 'Tous', 'toutes', const Color(0xFFFF6B35)),
-                          
-                          // API Filter: 'agent' (Database: Agent, UI: Argent)
                           _buildFilterIcon(Icons.attach_money, 'Argent', 'agent', const Color(0xFFC0C0C0)),
-                          
-                          // API Filter: 'gold' (Database: Gold)
                           _buildFilterIcon(Icons.workspace_premium, 'Gold', 'gold', const Color(0xFFFFD700)),
-                          
-                          // API Filter: 'diamant' (Database: Diamant)
                           _buildFilterIcon(Icons.diamond, 'Diamant', 'diamant', const Color(0xFF00BCD4)),
-                          
-                          // API Filter: 'ma_commune'
                           _buildFilterIcon(Icons.location_on, 'Commune', 'ma_commune', const Color(0xFF9C27B0)),
                         ],
                       ),
@@ -242,13 +290,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final promo = _promotions[index];
-                      // On passe juste l'image (thumbnail) au VideoCard
-                      // Le clic est géré ici
                       return GestureDetector(
                         onTap: () => _openVideoPlayer(promo),
                         child: VideoCard(
                           promotion: promo,
-                          // On désactive la logique interne du VideoCard car on gère tout ici
                           isLiked: false, 
                           onLiked: () {},
                           onShared: () {},

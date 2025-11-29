@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../utils/colors.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/custom_button.dart';
+import 'history_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -638,17 +639,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildDivider(),
 
                   // Masquer "Sécurité" pour les utilisateurs sociaux
-                 // CONDITION POUR MASQUER LA SÉCURITÉ SI SOCIAL USER
+                  // CONDITION POUR MASQUER LA SÉCURITÉ SI SOCIAL USER
                   if (!user.isSocialUser) ...[
-                    _ProfileMenuItem(icon: Icons.lock, iconColor: Colors.orange, title: "Sécurité et mot de passe", onTap: () => _showChangePasswordSheet(context)),
+                    _ProfileMenuItem(
+                      icon: Icons.lock,
+                      iconColor: Colors.orange,
+                      title: "Sécurité et mot de passe",
+                      onTap: () => _showChangePasswordSheet(context),
+                    ),
                     _buildDivider(),
                   ],
 
-                  _ProfileMenuItem(icon: Icons.history, iconColor: Colors.orange, title: "Historique", onTap: () {}),
+                  _ProfileMenuItem(
+                    icon: Icons.history,
+                    iconColor: Colors.orange,
+                    title: "Historique",
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                    ),
+                  ),
                   _buildDivider(),
-                  _ProfileMenuItem(icon: Icons.history_edu, iconColor: Colors.orange, title: "Historique de transaction", onTap: () {}),
+                  _ProfileMenuItem(
+                    icon: Icons.history_edu,
+                    iconColor: Colors.orange,
+                    title: "Historique de transaction",
+                    onTap: () {},
+                  ),
                   _buildDivider(),
-                  _ProfileMenuItem(icon: Icons.description, iconColor: Colors.orange, title: "Condition générale", onTap: () {}),
+                  // --- ICI LE PARRAINAGE ---
+                  _ProfileMenuItem(
+                    icon: Icons.people_alt,
+                    iconColor: Colors.blueAccent, // Couleur distincte
+                    title: "Parrainage",
+                    onTap: () => _showReferralDialog(context, user),
+                  ),
+                  _buildDivider(),
+                  // -------------------------
+                  _ProfileMenuItem(
+                    icon: Icons.description,
+                    iconColor: Colors.orange,
+                    title: "Condition générale",
+                    onTap: () {},
+                  ),
                 ],
               ),
             ),
