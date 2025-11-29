@@ -14,6 +14,7 @@ class ApiConstants {
   static const String userProfile = '/user/profile';
   static const String updateProfile = '/auth/utilisateur/profile';
   static const String completeProfile = '/auth/utilisateur/complete-profile';
+  static const String uploadProfileImage = '/user/upload-profile-image';
 
   // Endpoints Data
   static const String villes = '/villes';
@@ -23,6 +24,13 @@ class ApiConstants {
   static const String promotions = '/promotions';
   static const String userEarnings = '/promotions/utilisateur/gains';
   static const String userVideos = '/promotions/utilisateur/videos';
+
+  // Endpoints Games
+  static const String gamePoints = '/games/points';
+  static const String gameWheel = '/games/wheel';
+  static const String gameList = '/games/list';
+  static const String gamePuzzleStart = '/games/puzzle/start';
+  static const String gamePuzzleSubmit = '/games/puzzle/submit';
 
   // Headers
   static const String authHeader = 'Authorization';

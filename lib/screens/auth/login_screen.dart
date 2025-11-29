@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'forgot_password_screen.dart';
 import '../../services/auth_service.dart';
 import '../../utils/colors.dart';
 import '../../utils/validators.dart';
@@ -30,25 +31,32 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
+ Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       try {
-        await Provider.of<AuthService>(
-          context,
-          listen: false,
-        ).login(_emailController.text, _passwordController.text);
-
-        // La navigation est gérée par le Stream/Listener dans main.dart
-        // Mais si on est venu ici via push, on peut pop ou pushReplacement
-        // Pour l'instant on laisse le listener gérer ou on fait un check
-        // Si le login réussit sans erreur, on peut assumer que l'état a changé
+        await Provider.of<AuthService>(context, listen: false)
+            .login(_emailController.text.trim(), _passwordController.text);
+        
+        // Si tout va bien, la redirection est gérée par le main.dart (Stream)
+        
+      } on IncompleteProfileException {
+        // C'EST ICI LA CORRECTION : On intercepte l'exception spécifique
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const CompleteSocialProfileScreen(),
+            ),
+          );
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erreur connexion: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        // Les autres erreurs (mot de passe incorrect, serveur down, etc.)
+        final msg = AuthService.getErrorMessage(e);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: Colors.red),
+          );
+        }
       }
     }
   }
@@ -111,18 +119,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       validator: Validators.validatePassword,
                     ),
 
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {
-                          // TODO: Implémenter mot de passe oublié
-                        },
-                        child: const Text(
-                          "Mot de passe oublié ?",
-                          style: TextStyle(color: AppColors.textMuted),
-                        ),
-                      ),
-                    ),
+                   Align(
+    alignment: Alignment.centerRight,
+    child: TextButton(
+      onPressed: () {
+        Navigator.push(
+          context, 
+          MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())
+        );
+      },
+      child: const Text(
+        "Mot de passe oublié ?",
+        style: TextStyle(color: AppColors.textMuted),
+      ),
+    ),
+  ),
 
                     const SizedBox(height: 20),
 
@@ -165,32 +176,28 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                         }
                       },
-                      onGoogleTap: () async {
-                        try {
-                          await authService.loginWithGoogle();
-                        } on IncompleteProfileException {
-                          if (mounted) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const CompleteSocialProfileScreen(),
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Erreur connexion: ${e.toString()}',
-                                ),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        }
-                      },
+                     onGoogleTap: () async {
+  print("🔵 Clic sur Google Login"); // Log 1
+  try {
+    await authService.loginWithGoogle();
+    print("🟢 Login Google Service terminé"); // Log 2
+  } on IncompleteProfileException {
+    print("🟠 Profil incomplet -> Redirection"); // Log 3
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const CompleteSocialProfileScreen()),
+      );
+    }
+  } catch (e) {
+    print("🔴 Erreur Google Login: $e"); // Log 4
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+},
                     ),
 
                     const SizedBox(height: 40),

@@ -57,4 +57,37 @@ class PromotionService {
       return false;
     }
   }
+   // === NOUVEAU : HISTORIQUE DES RETRAITS ===
+  Future<List<dynamic>> getWithdrawHistory() async {
+    try {
+      // Endpoint basé sur PromotionController.js: getWithdrawalHistoryForUser
+      final response = await _apiService.get('/promotions/utilisateur/historique-retraits');
+      return response.data; // Retourne la liste des transactions
+    } catch (e) {
+      print("Erreur historique retrait: $e");
+      return [];
+    }
+  }
+
+  // === NOUVEAU : DEMANDE DE RETRAIT ===
+  Future<void> requestWithdraw({
+    required int amount,
+    required String operator,
+    required String phoneNumber,
+  }) async {
+    try {
+      // Endpoint basé sur PromotionController.js: withdrawEarnings
+      await _apiService.post(
+        '/promotions/utilisateur/retrait',
+        data: {
+          'amount': amount,
+          'operator': operator,
+          'phoneNumber': phoneNumber,
+        },
+      );
+    } catch (e) {
+      // On relance l'erreur pour l'afficher dans l'UI (ex: solde insuffisant)
+      rethrow;
+    }
+  }
 }

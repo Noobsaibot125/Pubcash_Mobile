@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/colors.dart';
 import 'home_screen.dart';
 import 'gains_screen.dart';
-import 'gamehub_screen.dart';
+import 'games/game_hub_screen.dart';
 import 'profile_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -18,7 +18,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final List<Widget> _screens = [
     const HomeScreen(),
     const GainsScreen(),
-    const GamehubScreen(),
+    const GameHubScreen(),
     const ProfileScreen(),
   ];
 
