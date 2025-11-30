@@ -20,7 +20,12 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
   Timer? _timer;
   
   final int _gridSize = 3;
+  
+  // Liste des positions actuelles.
   List<int> _tiles = []; 
+  
+  // Pour la logique de "Swap" au clic (gardée en plus du glisser)
+  int? _selectedTileIndex;
 
   @override
   void initState() {
@@ -89,52 +94,74 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
   }
 
   void _shuffleTiles() {
-    _tiles = List.generate(_gridSize * _gridSize, (index) => index);
-    int emptyIndex = _tiles.length - 1;
-    for (int i = 0; i < 100; i++) {
-      final neighbors = _getNeighbors(emptyIndex);
-      final randomNeighbor = neighbors[DateTime.now().microsecond % neighbors.length];
-      _swap(emptyIndex, randomNeighbor);
-      emptyIndex = randomNeighbor;
-    }
+    List<int> temp = List.from(_tiles);
+    temp.shuffle(); 
+    _tiles = temp;
+    _selectedTileIndex = null;
   }
 
-  List<int> _getNeighbors(int index) {
-    List<int> neighbors = [];
-    int row = index ~/ _gridSize;
-    int col = index % _gridSize;
-    if (row > 0) neighbors.add(index - _gridSize);
-    if (row < _gridSize - 1) neighbors.add(index + _gridSize);
-    if (col > 0) neighbors.add(index - 1);
-    if (col < _gridSize - 1) neighbors.add(index + 1);
-    return neighbors;
-  }
-
-  void _onTileTap(int index) {
-    if (!_isPlaying) return;
-    final currentEmptyIndex = _tiles.indexOf(_gridSize * _gridSize - 1);
-    
-    if (_isAdjacent(index, currentEmptyIndex)) {
-      setState(() {
-        _swap(index, currentEmptyIndex);
-        if (_checkWin()) _endGame(success: true);
-      });
-    }
-  }
-
-  bool _isAdjacent(int idx1, int idx2) {
-    int row1 = idx1 ~/ _gridSize; int col1 = idx1 % _gridSize;
-    int row2 = idx2 ~/ _gridSize; int col2 = idx2 % _gridSize;
-    return (row1 == row2 && (col1 - col2).abs() == 1) || (col1 == col2 && (row1 - row2).abs() == 1);
-  }
-
+  // --- LOGIQUE D'ECHANGE ---
   void _swap(int idx1, int idx2) {
-    final temp = _tiles[idx1]; _tiles[idx1] = _tiles[idx2]; _tiles[idx2] = temp;
+    final temp = _tiles[idx1]; 
+    _tiles[idx1] = _tiles[idx2]; 
+    _tiles[idx2] = temp;
   }
 
   bool _checkWin() {
-    for (int i = 0; i < _tiles.length; i++) { if (_tiles[i] != i) return false; }
+    for (int i = 0; i < _tiles.length; i++) { 
+      if (_tiles[i] != i) return false; 
+    }
     return true;
+  }
+
+  // --- GESTION DU CLIC (Optionnel si on veut garder le clic simple) ---
+  void _onTileTap(int index) {
+    if (!_isPlaying) return;
+
+    setState(() {
+      if (_selectedTileIndex == null) {
+        _selectedTileIndex = index;
+      } else {
+        if (_selectedTileIndex != index) {
+          _swap(_selectedTileIndex!, index);
+          if (_checkWin()) _endGame(success: true);
+        }
+        _selectedTileIndex = null;
+      }
+    });
+  }
+
+  // --- WIDGET POUR AFFICHER L'IMAGE DÉCOUPÉE ---
+  // J'ai extrait cette logique pour la réutiliser dans le Draggable (feedback) et le DragTarget
+  Widget _buildTileVisual(int tileContentId, BoxConstraints constraints, {bool isOpacity = false}) {
+    if (widget.game.imageUrl == null || widget.game.imageUrl!.isEmpty) {
+      return Container(
+        color: AppColors.primary,
+        child: Center(child: Text("${tileContentId + 1}", style: const TextStyle(color: Colors.white, fontSize: 20))),
+      );
+    }
+
+    int originalRow = tileContentId ~/ _gridSize;
+    int originalCol = tileContentId % _gridSize;
+
+    return Opacity(
+      opacity: isOpacity ? 0.3 : 1.0, // Transparence si c'est la case qu'on déplace
+      child: Stack(
+        children: [
+          Positioned(
+            left: - (originalCol * constraints.maxWidth),
+            top: - (originalRow * constraints.maxHeight),
+            width: constraints.maxWidth * _gridSize,
+            height: constraints.maxHeight * _gridSize,
+            child: Image.network(
+              widget.game.imageUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (_,__,___) => Container(color: Colors.grey),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -158,69 +185,81 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
               style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: _timeLeft < 10 ? Colors.red : AppColors.primary)
             ),
           ),
+          
           Expanded(
             child: Center(
               child: AspectRatio(
                 aspectRatio: 1,
                 child: Container(
                   margin: const EdgeInsets.all(20),
-                  padding: const EdgeInsets.all(2), // Bordure très fine
                   decoration: BoxDecoration(
-                    color: Colors.grey[800], // Fond foncé pour faire ressortir l'image
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [const BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 5))],
+                    color: Colors.grey[300], 
+                    border: Border.all(color: Colors.black, width: 2),
                   ),
                   child: _isPlaying || _isGameOver
                       ? GridView.builder(
                           physics: const NeverScrollableScrollPhysics(),
-                          // Espacement minimal (1px) pour le style "Web"
                           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: _gridSize, 
-                            crossAxisSpacing: 1, 
-                            mainAxisSpacing: 1
+                            crossAxisSpacing: 2, 
+                            mainAxisSpacing: 2
                           ),
                           itemCount: _tiles.length,
                           itemBuilder: (context, index) {
-                            final tileValue = _tiles[index];
-                            final isEmpty = tileValue == _gridSize * _gridSize - 1;
+                            final int tileContentId = _tiles[index];
+                            final bool isSelected = _selectedTileIndex == index;
 
-                            // --- MODIFICATION : Case vide totalement transparente ---
-                            if (isEmpty) {
-                              return Container(color: Colors.transparent); 
-                            }
-
-                            int originalRow = tileValue ~/ _gridSize;
-                            int originalCol = tileValue % _gridSize;
-
-                            Alignment alignment = Alignment(
-                              (originalCol * 2 / (_gridSize - 1)) - 1,
-                              (originalRow * 2 / (_gridSize - 1)) - 1,
-                            );
-
-                            return GestureDetector(
-                              onTap: () => _onTileTap(index),
-                              child: Container(
-                                // Suppression des bordures arrondies internes pour l'effet "Web"
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    if (widget.game.imageUrl == null || widget.game.imageUrl!.isEmpty) {
-                                      return Center(child: Text("${tileValue + 1}", style: const TextStyle(fontSize: 20, color: Colors.white)));
-                                    }
-
-                                    return OverflowBox(
-                                      maxWidth: constraints.maxWidth * _gridSize,
-                                      maxHeight: constraints.maxHeight * _gridSize,
-                                      alignment: alignment,
-                                      child: Image.network(
-                                        widget.game.imageUrl!,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_,__,___) => const Center(child: Icon(Icons.broken_image, color: Colors.white)),
+                            // On utilise LayoutBuilder pour connaître la taille exacte de la case pour le découpage
+                            return LayoutBuilder(
+                              builder: (context, constraints) {
+                                // 1. DRAG TARGET : Accepte qu'on dépose une tuile ici
+                                return DragTarget<int>(
+                                  onWillAccept: (data) => !_isGameOver && _isPlaying, // Accepter si le jeu est en cours
+                                  onAccept: (draggedIndex) {
+                                    setState(() {
+                                      _swap(draggedIndex, index);
+                                      if (_checkWin()) _endGame(success: true);
+                                    });
+                                  },
+                                  builder: (context, candidateData, rejectedData) {
+                                    // 2. DRAGGABLE : Permet de déplacer cette tuile
+                                    return LongPressDraggable<int>(
+                                      data: index, // On passe l'index actuel
+                                      feedback: Material(
+                                        elevation: 5,
+                                        color: Colors.transparent,
+                                        child: SizedBox(
+                                          width: constraints.maxWidth,
+                                          height: constraints.maxHeight,
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: Colors.blueAccent, width: 2)
+                                            ),
+                                            child: _buildTileVisual(tileContentId, constraints),
+                                          ),
+                                        ),
+                                      ),
+                                      childWhenDragging: Container(
+                                        color: Colors.grey[300], // Case grise quand on la déplace
+                                      ),
+                                      // L'élément au repos (qu'on voit normalement)
+                                      child: GestureDetector(
+                                        onTap: () => _onTileTap(index),
+                                        child: Container(
+                                          decoration: isSelected 
+                                            ? BoxDecoration(border: Border.all(color: Colors.blueAccent, width: 3)) 
+                                            : (candidateData.isNotEmpty 
+                                                ? BoxDecoration(border: Border.all(color: Colors.green, width: 3)) // Effet visuel si on survole
+                                                : null),
+                                          child: ClipRect(
+                                            child: _buildTileVisual(tileContentId, constraints),
+                                          ),
+                                        ),
                                       ),
                                     );
-                                    // --- SUPPRESSION DU TEXTE (NUMÉROS) ICI ---
                                   },
-                                ),
-                              ),
+                                );
+                              },
                             );
                           },
                         )
@@ -230,6 +269,8 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
                             children: [
                               if (widget.game.imageUrl != null)
                                 Container(
+                                  width: 250,
+                                  height: 250,
                                   decoration: BoxDecoration(
                                     border: Border.all(color: AppColors.primary, width: 2),
                                     borderRadius: BorderRadius.circular(12)
@@ -238,8 +279,6 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
                                     borderRadius: BorderRadius.circular(10),
                                     child: Image.network(
                                       widget.game.imageUrl!, 
-                                      height: 250, 
-                                      width: 250, 
                                       fit: BoxFit.cover,
                                       errorBuilder: (_,__,___) => const Icon(Icons.image, size: 80, color: Colors.grey),
                                     ),
@@ -262,10 +301,14 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
               ),
             ),
           ),
+          
           if (_isPlaying) 
             const Padding(
               padding: EdgeInsets.all(20), 
-              child: Text("Reconstituez l'image !", style: TextStyle(fontSize: 16, color: Colors.grey, fontStyle: FontStyle.italic))
+              child: Text(
+                "Glissez une case sur une autre pour échanger !", 
+                style: TextStyle(fontSize: 16, color: Colors.grey, fontStyle: FontStyle.italic)
+              )
             ),
         ],
       ),
