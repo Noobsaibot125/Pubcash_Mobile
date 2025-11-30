@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 import 'dart:io';
 import '../models/user.dart';
 import '../utils/api_constants.dart';
+import 'notification_service.dart';
 import '../utils/exceptions.dart';
 
 class AuthService with ChangeNotifier {
@@ -370,7 +371,7 @@ class AuthService with ChangeNotifier {
   }
 
   // --- 7. TRAITEMENT RÉPONSE AUTH ---
-  Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
+ Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
     final String accessToken = data['accessToken']?.toString() ?? '';
     final String refreshToken = data['refreshToken']?.toString() ?? '';
 
@@ -388,14 +389,21 @@ class AuthService with ChangeNotifier {
       }
     }
 
-    // CORRECTION ICI : On utilise le flag backend OU notre vérification manuelle
     if (data['profileCompleted'] == false) {
       _requiresProfileCompletion = true;
     } else {
-      _checkIfProfileIsComplete(); // Double sécurité
+      _checkIfProfileIsComplete();
     }
 
     notifyListeners();
+
+    // ============================================================
+    // 2. AJOUT CRUCIAL : ON FORCE L'ENVOI DU TOKEN ICI
+    // ============================================================
+    print("🔐 Connexion réussie, initialisation des notifications...");
+    // On ne met pas 'await' pour ne pas bloquer l'UI, ça se fait en background
+    NotificationService().initialiser(); 
+    // ============================================================
 
     if (_requiresProfileCompletion) {
       throw IncompleteProfileException();

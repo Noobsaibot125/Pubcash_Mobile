@@ -155,15 +155,21 @@ class _CompleteSocialProfileScreenState
           genre: _selectedGenre,
         );
 
-        // Navigation is handled by AuthWrapper in main.dart
-        // But we can pop if we were pushed here
+        // ✅ CORRECTION ICI :
+        // Au lieu de faire un popUntil (qui attend que AuthWrapper réagisse),
+        // on force la navigation vers /home et on vide l'historique arrière.
         if (mounted) {
-          Navigator.popUntil(context, (route) => route.isFirst);
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/home', 
+            (route) => false // Ceci supprime toutes les pages précédentes (Login, etc.)
+          );
         }
       } catch (e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Erreur: ${e.toString()}')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur: ${e.toString()}')),
+          );
+        }
       }
     }
   }
