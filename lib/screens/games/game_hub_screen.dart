@@ -180,20 +180,25 @@ class _GameHubScreenState extends State<GameHubScreen> {
     );
   }
 
-  Widget _build3DWheelCard() {
+ Widget _build3DWheelCard() {
     return GestureDetector(
+      // --- CORRECTION ICI : NAVIGATION ACTIVÉE ---
       onTap: () async {
         print("Navigation vers la roue de la fortune");
-         // Navigator.push...
+        final result = await Navigator.push(
+          context, 
+          MaterialPageRoute(builder: (_) => const WheelGameScreen())
+        );
+        if (result == true) _loadData();
       },
       child: Container(
         height: 200,
         decoration: BoxDecoration(
-          color: Colors.black, // <--- FOND NOIR ICI
+          color: Colors.black,
           borderRadius: BorderRadius.circular(25),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.4), // Ombre noire
+                color: Colors.black.withOpacity(0.4),
                 blurRadius: 15,
                 offset: const Offset(0, 10))
           ],
@@ -202,17 +207,14 @@ class _GameHubScreenState extends State<GameHubScreen> {
           borderRadius: BorderRadius.circular(25),
           child: Stack(
             children: [
-              // 1. L'image de la roue
               Positioned.fill(
                 child: Image.asset(
                   'assets/images/Wheel.png', 
-                  fit: BoxFit.cover, // Ou BoxFit.contain si tu veux voir toute la roue sans coupure
+                  fit: BoxFit.cover,
                   errorBuilder: (c, e, s) => const Center(child: Icon(Icons.error, color: Colors.white)),
                 ),
               ),
-              
-              // 2. Le texte par dessus (Optionnel, si tu veux garder le texte)
-              // Si 'Wheel.png' contient déjà le texte, supprime ce bloc Padding
+              // Texte par dessus (optionnel, tu peux le retirer si l'image contient déjà le texte)
               Padding(
                 padding: const EdgeInsets.all(25),
                 child: Column(

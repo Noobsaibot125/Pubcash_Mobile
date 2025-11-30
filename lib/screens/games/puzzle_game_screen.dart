@@ -19,19 +19,13 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
   int _timeLeft = 0;
   Timer? _timer;
   
-  // Taille de la grille (3x3)
   final int _gridSize = 3;
-  
-  // Cette liste contient les VALEURS des tuiles.
-  // La valeur 0 correspond au coin haut-gauche de l'image originale.
-  // La valeur 8 (pour une grille 3x3) est la case vide.
   List<int> _tiles = []; 
 
   @override
   void initState() {
     super.initState();
     _timeLeft = widget.game.dureeLimite ?? 60;
-    // Initialisation : 0, 1, 2, 3, 4, 5, 6, 7, 8
     _tiles = List.generate(_gridSize * _gridSize, (index) => index);
   }
 
@@ -97,8 +91,6 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
   void _shuffleTiles() {
     _tiles = List.generate(_gridSize * _gridSize, (index) => index);
     int emptyIndex = _tiles.length - 1;
-    // On effectue 100 mouvements aléatoires valides pour mélanger
-    // Cela garantit que le puzzle reste résolvable
     for (int i = 0; i < 100; i++) {
       final neighbors = _getNeighbors(emptyIndex);
       final randomNeighbor = neighbors[DateTime.now().microsecond % neighbors.length];
@@ -120,7 +112,6 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
 
   void _onTileTap(int index) {
     if (!_isPlaying) return;
-    // Trouver où est la case vide (valeur 8) dans la liste mélangée
     final currentEmptyIndex = _tiles.indexOf(_gridSize * _gridSize - 1);
     
     if (_isAdjacent(index, currentEmptyIndex)) {
@@ -142,7 +133,6 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
   }
 
   bool _checkWin() {
-    // Le puzzle est gagné si la liste est triée (0, 1, 2, ...)
     for (int i = 0; i < _tiles.length; i++) { if (_tiles[i] != i) return false; }
     return true;
   }
@@ -174,37 +164,34 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
                 aspectRatio: 1,
                 child: Container(
                   margin: const EdgeInsets.all(20),
-                  padding: const EdgeInsets.all(4), // Padding réduit pour coller les images
+                  padding: const EdgeInsets.all(2), // Bordure très fine
                   decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.grey[400]!, width: 2),
+                    color: Colors.grey[800], // Fond foncé pour faire ressortir l'image
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [const BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 5))],
                   ),
                   child: _isPlaying || _isGameOver
                       ? GridView.builder(
                           physics: const NeverScrollableScrollPhysics(),
-                          // Espacement très fin (2px) pour l'esthétique du puzzle image
+                          // Espacement minimal (1px) pour le style "Web"
                           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: _gridSize, 
-                            crossAxisSpacing: 2, 
-                            mainAxisSpacing: 2
+                            crossAxisSpacing: 1, 
+                            mainAxisSpacing: 1
                           ),
                           itemCount: _tiles.length,
                           itemBuilder: (context, index) {
-                            // tileValue représente le morceau de l'image (0=haut-gauche, 1=haut-milieu...)
                             final tileValue = _tiles[index];
                             final isEmpty = tileValue == _gridSize * _gridSize - 1;
 
+                            // --- MODIFICATION : Case vide totalement transparente ---
                             if (isEmpty) {
-                              return Container(color: Colors.white.withOpacity(0.3)); // Case vide légèrement visible
+                              return Container(color: Colors.transparent); 
                             }
 
-                            // --- LOGIQUE D'AFFICHAGE DE L'IMAGE ---
-                            // 1. Calcul de la position originale (Ligne/Colonne) de ce morceau
                             int originalRow = tileValue ~/ _gridSize;
                             int originalCol = tileValue % _gridSize;
 
-                            // 2. Création de l'Alignment pour centrer la bonne partie de l'image
                             Alignment alignment = Alignment(
                               (originalCol * 2 / (_gridSize - 1)) - 1,
                               (originalRow * 2 / (_gridSize - 1)) - 1,
@@ -212,53 +199,26 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
 
                             return GestureDetector(
                               onTap: () => _onTileTap(index),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(5),
-                                child: Container(
-                                  color: AppColors.primary, // Couleur de fond si l'image ne charge pas
-                                  child: LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      // Si pas d'image, on affiche l'ancien style (chiffres sur fond orange)
-                                      if (widget.game.imageUrl == null || widget.game.imageUrl!.isEmpty) {
-                                        return Center(
-                                          child: Text(
-                                            "${tileValue + 1}",
-                                            style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Colors.white),
-                                          ),
-                                        );
-                                      }
+                              child: Container(
+                                // Suppression des bordures arrondies internes pour l'effet "Web"
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    if (widget.game.imageUrl == null || widget.game.imageUrl!.isEmpty) {
+                                      return Center(child: Text("${tileValue + 1}", style: const TextStyle(fontSize: 20, color: Colors.white)));
+                                    }
 
-                                      return Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          // COUCHE 1 : L'IMAGE ZOOMÉE ET DÉCALÉE
-                                          OverflowBox(
-                                            maxWidth: constraints.maxWidth * _gridSize,
-                                            maxHeight: constraints.maxHeight * _gridSize,
-                                            alignment: alignment,
-                                            child: Image.network(
-                                              widget.game.imageUrl!,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_,__,___) => const Center(child: Icon(Icons.broken_image, color: Colors.white)),
-                                            ),
-                                          ),
-                                          
-                                          // COUCHE 2 : LE NUMÉRO (Optionnel, semi-transparent pour aider)
-                                          Center(
-                                            child: Text(
-                                              "${tileValue + 1}",
-                                              style: TextStyle(
-                                                fontSize: 24, 
-                                                fontWeight: FontWeight.bold, 
-                                                color: Colors.white.withOpacity(0.8),
-                                                shadows: const [Shadow(offset: Offset(1, 1), blurRadius: 2, color: Colors.black)],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
+                                    return OverflowBox(
+                                      maxWidth: constraints.maxWidth * _gridSize,
+                                      maxHeight: constraints.maxHeight * _gridSize,
+                                      alignment: alignment,
+                                      child: Image.network(
+                                        widget.game.imageUrl!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_,__,___) => const Center(child: Icon(Icons.broken_image, color: Colors.white)),
+                                      ),
+                                    );
+                                    // --- SUPPRESSION DU TEXTE (NUMÉROS) ICI ---
+                                  },
                                 ),
                               ),
                             );
@@ -278,8 +238,8 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
                                     borderRadius: BorderRadius.circular(10),
                                     child: Image.network(
                                       widget.game.imageUrl!, 
-                                      height: 200, 
-                                      width: 200, 
+                                      height: 250, 
+                                      width: 250, 
                                       fit: BoxFit.cover,
                                       errorBuilder: (_,__,___) => const Icon(Icons.image, size: 80, color: Colors.grey),
                                     ),
