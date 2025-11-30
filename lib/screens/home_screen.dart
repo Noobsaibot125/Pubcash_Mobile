@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/promotion_service.dart';
@@ -9,7 +10,7 @@ import '../utils/colors.dart';
 import '../widgets/video_card.dart';
 import 'video_player_screen.dart';
 import 'notifications_screen.dart';
-import 'profile_screen.dart'; // Assurez-vous d'importer votre écran de profil
+import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -28,7 +29,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _points = 0;
   
   // Variable pour le badge de notification
-  int _unreadCount = 0; 
+  int _unreadCount = 0;
+  StreamSubscription<int>? _badgeSubscription; // Pour écouter les notifs en temps réel
   
   bool _loading = true;
   
@@ -36,8 +38,21 @@ class _HomeScreenState extends State<HomeScreen> {
   String _filter = 'toutes';
   bool _isInit = true;
 
-  // NOUVEAU : Pour cacher/montrer le solde
+  // Pour cacher/montrer le solde
   bool _showBalance = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // On s'abonne au flux de notifications dès le lancement
+    _badgeSubscription = NotificationService().unreadCountStream.listen((count) {
+      if (mounted) {
+        setState(() {
+          _unreadCount = count;
+        });
+      }
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -46,6 +61,13 @@ class _HomeScreenState extends State<HomeScreen> {
       _isInit = false;
     }
     super.didChangeDependencies();
+  }
+
+  @override
+  void dispose() {
+    // Très important : on coupe l'écoute quand on quitte l'écran
+    _badgeSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -58,15 +80,17 @@ class _HomeScreenState extends State<HomeScreen> {
       // 1. Charger profil user
       await authService.refreshUserProfile();
       
-      // 2. Charger les données API en parallèle (en passant le filtre)
+      // 2. Charger les données API en parallèle
+      // Note: getUnreadCount va aussi déclencher le Stream, donc _unreadCount se mettra à jour
       final results = await Future.wait([
         _promotionService.getPromotions(filter: _filter),
         _promotionService.getEarnings(),
-        NotificationService().getUnreadCount()
+        NotificationService().getUnreadCount() 
       ]);
 
       final promos = results[0] as List<Promotion>;
       final earnings = results[1] as Map<String, dynamic>;
+      // results[2] est le count, mais le stream le gère aussi. On le prend quand même.
       final unread = results[2] as int;
       
       if (mounted) {
@@ -98,14 +122,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Helper pour construire l'URL de l'image de profil
   String? _getProfileImageUrl(String? photoUrl) {
     if (photoUrl == null || photoUrl.isEmpty) return null;
     if (photoUrl.startsWith('http')) {
       return "$photoUrl?v=${DateTime.now().millisecondsSinceEpoch}";
     }
-    // Remplacez par votre URL de base (ex: http://192.168.1.XX:5000)
-    // Assurez-vous que cette URL est accessible depuis le téléphone
     const String baseUrl = "http://192.168.1.15:5000"; 
     return "$baseUrl/uploads/profile/$photoUrl?v=${DateTime.now().millisecondsSinceEpoch}";
   }
@@ -130,7 +151,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 backgroundColor: Colors.white,
                 elevation: 2,
                 shadowColor: Colors.black.withOpacity(0.1),
-                // --- MODIFICATION 1 : LOGO A GAUCHE ---
                 title: Row(
                   children: [
                     Image.asset(
@@ -183,10 +203,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
 
-                  // --- MODIFICATION 2 : PROFIL UTILISATEUR ---
+                  // --- PROFIL UTILISATEUR ---
                   GestureDetector(
                     onTap: () {
-                      // Navigation vers la page de profil
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const ProfileScreen()),
@@ -197,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Container(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.orange, width: 2), // Cercle vert/orange autour
+                          border: Border.all(color: Colors.orange, width: 2),
                         ),
                         child: CircleAvatar(
                           radius: 18,
@@ -257,7 +276,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                             const SizedBox(height: 12),
                             
-                            // --- MODIFICATION 3 : SOLDE MASQUÉ / OEIL ---
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               crossAxisAlignment: CrossAxisAlignment.end,
@@ -297,14 +315,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 28),
 
                     // === FILTRES CIRCULAIRES ===
-                    // --- MODIFICATION 4 : FILTRAGE ---
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           _buildFilterIcon(Icons.home_rounded, 'Tous', 'toutes', const Color(0xFFFF6B35)),
-                          _buildFilterIcon(Icons.attach_money, 'Argent', 'argent', const Color(0xFFC0C0C0)), // 'argent' au lieu de 'agent'
+                          _buildFilterIcon(Icons.attach_money, 'Argent', 'argent', const Color(0xFFC0C0C0)),
                           _buildFilterIcon(Icons.workspace_premium, 'Gold', 'gold', const Color(0xFFFFD700)),
                           _buildFilterIcon(Icons.diamond, 'Diamant', 'diamant', const Color(0xFF00BCD4)),
                           _buildFilterIcon(Icons.location_on, 'Commune', 'ma_commune', const Color(0xFF9C27B0)),

@@ -61,6 +61,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.13.1
   flutter_lints: ^6.0.0
 
 flutter:
@@ -69,3 +70,11 @@ flutter:
   assets:
     - assets/images/
     - assets/animations/
+
+# Configuration des icones (doit être tout à gauche, sans espace avant)
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/logoI.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true

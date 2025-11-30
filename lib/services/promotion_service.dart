@@ -9,7 +9,7 @@ class PromotionService {
     try {
       // Utilise la constante pour être sûr de l'URL
       final response = await _apiService.get(
-        ApiConstants.promotions, 
+        ApiConstants.promotions,
         queryParameters: {'filter': filter},
       );
 
@@ -25,7 +25,7 @@ class PromotionService {
   Future<Map<String, dynamic>> getEarnings() async {
     try {
       // Utilise la constante définie dans ApiConstants (/promotions/utilisateur/gains)
-      final response = await _apiService.get(ApiConstants.userEarnings); 
+      final response = await _apiService.get(ApiConstants.userEarnings);
       return response.data;
     } catch (e) {
       print('Erreur fetching earnings: $e');
@@ -40,16 +40,14 @@ class PromotionService {
   Future<void> sharePromotion(int promoId) async {
     await _apiService.post('${ApiConstants.promotions}/$promoId/partage');
   }
-// === NOUVEAU : SOUMETTRE QUIZ ===
+
+  // === NOUVEAU : SOUMETTRE QUIZ ===
   Future<bool> submitQuiz(int gameId, String reponse) async {
     try {
       // Endpoint basé sur GameController.js: exports.submitQuiz
       final response = await _apiService.post(
         '/games/quiz/submit', // Assure-toi que c'est la bonne route dans ton router.js
-        data: {
-          'gameId': gameId,
-          'reponse': reponse,
-        },
+        data: {'gameId': gameId, 'reponse': reponse},
       );
       return response.data['success'] == true;
     } catch (e) {
@@ -57,20 +55,26 @@ class PromotionService {
       return false;
     }
   }
-   // === NOUVEAU : HISTORIQUE DES RETRAITS ===
+
+  // === NOUVEAU : HISTORIQUE DES RETRAITS ===
   Future<List<dynamic>> getWithdrawHistory() async {
     try {
       // Endpoint basé sur PromotionController.js: getWithdrawalHistoryForUser
-      final response = await _apiService.get('/promotions/utilisateur/historique-retraits');
+      final response = await _apiService.get(
+        '/promotions/utilisateur/historique-retraits',
+      );
       return response.data; // Retourne la liste des transactions
     } catch (e) {
       print("Erreur historique retrait: $e");
       return [];
     }
   }
+
   Future<List<dynamic>> getInteractionHistory() async {
     try {
-      final response = await _apiService.get('/promotions/historique');
+      final response = await _apiService.get(
+        '/promotions/utilisateur/historique-videos',
+      );
       return response.data;
     } catch (e) {
       print("Erreur historique interactions: $e");

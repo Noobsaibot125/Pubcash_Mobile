@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:convert'; // Nécessaire pour jsonDecode si donnees est une string
 
 class AppNotification {
   final int id;
@@ -20,18 +21,48 @@ class AppNotification {
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
+    // 1. GESTION ROBUSTE DE LA DATE
+    // MySQL renvoie souvent "YYYY-MM-DD HH:MM:SS" qui fait planter DateTime.parse
+    DateTime parsedDate = DateTime.now();
+    if (json['date_creation'] != null) {
+      String dateStr = json['date_creation'].toString();
+      // Si la date contient un espace au lieu du T, on parse manuellement ou on remplace
+      // DateTime.tryParse est plus sûr, il ne fera pas crasher l'app
+      parsedDate = DateTime.tryParse(dateStr) ?? 
+                   DateTime.tryParse(dateStr.replaceAll(' ', 'T')) ?? 
+                   DateTime.now();
+    }
+
+    // 2. GESTION ROBUSTE DU BOOLEEN
+    // MySQL renvoie 0 ou 1, pas true/false
+    bool isRead = false;
+    if (json['lu'] == 1 || json['lu'] == true || json['lu'] == '1') {
+      isRead = true;
+    }
+
+    // 3. GESTION ROBUSTE DES DONNEES (JSON)
+    Map<String, dynamic>? parsedData;
+    if (json['donnees'] != null) {
+      if (json['donnees'] is Map) {
+        parsedData = Map<String, dynamic>.from(json['donnees']);
+      } else if (json['donnees'] is String && json['donnees'].isNotEmpty) {
+        try {
+          parsedData = jsonDecode(json['donnees']);
+        } catch (e) {
+          print("Erreur parsing donnees notification: $e");
+          parsedData = {};
+        }
+      }
+    }
+
     return AppNotification(
-      id: json['id'],
-      type: json['type'],
-      titre: json['titre'],
-      contenu: json['contenu'],
-      donnees: json['donnees'] != null
-          ? (json['donnees'] is String
-                ? {} // Si c'est une string vide ou null JSON
-                : Map<String, dynamic>.from(json['donnees']))
-          : null,
-      lu: json['lu'] ?? false,
-      dateCreation: DateTime.parse(json['date_creation']),
+      id: json['id'] ?? 0, // Sécurité si null
+      type: json['type'] ?? 'info',
+      titre: json['titre'] ?? 'Notification',
+      contenu: json['contenu'] ?? '',
+      donnees: parsedData,
+      lu: isRead,
+      dateCreation: parsedDate,
     );
   }
 
@@ -39,7 +70,8 @@ class AppNotification {
   IconData get icone {
     switch (type) {
       case 'video_regardee':
-        return Icons.play_circle;
+        return Icons.play_circle_fill;
+      case 'nouvelle_promo': // Type utilisé dans notificationService.js
       case 'nouvelle_video':
         return Icons.video_library;
       case 'jeu_gagne':
@@ -48,6 +80,8 @@ class AppNotification {
         return Icons.access_time;
       case 'retrait_complete':
         return Icons.check_circle;
+      case 'retrait_echec':
+        return Icons.error;
       default:
         return Icons.notifications;
     }
@@ -58,41 +92,38 @@ class AppNotification {
     switch (type) {
       case 'video_regardee':
         return Colors.green;
+      case 'nouvelle_promo':
       case 'nouvelle_video':
-        return Colors.blue;
+        return const Color(0xFFFF8C42); // Orange PubCash
       case 'jeu_gagne':
-        return Colors.orange;
+        return Colors.amber;
       case 'retrait_initie':
-        return Colors.grey;
+        return Colors.blueGrey;
       case 'retrait_complete':
         return Colors.green;
+      case 'retrait_echec':
+        return Colors.red;
       default:
         return Colors.grey;
     }
-  }
-
-  // Image de profil (optionnel - pour les notifications de nouveaux videos)
-  String? get avatarUrl {
-    if (donnees != null && donnees!['promoteur_photo'] != null) {
-      return donnees!['promoteur_photo'];
-    }
-    return null;
   }
 
   // Montant (pour affichage)
   String? get montantFormate {
     if (donnees == null) return null;
 
+    // Gestion flexible (parfois c'est 'montant', parfois 'points')
     final montant = donnees!['montant'];
-    if (montant == null) return null;
+    final points = donnees!['points'];
 
-    if (type.contains('retrait')) {
+    if (type.contains('retrait') && montant != null) {
       return '$montant Fcfa';
-    } else if (type == 'jeu_gagne') {
-      final points = donnees!['points'] ?? montant;
+    } else if (type == 'jeu_gagne' && points != null) {
       return '$points pts';
-    } else {
+    } else if (type == 'video_regardee' && montant != null) {
       return '$montant FCFA';
     }
+    
+    return null;
   }
 }

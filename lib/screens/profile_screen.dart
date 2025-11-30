@@ -88,6 +88,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _prenomController.text = user?.prenom ?? '';
     _usernameController.text = user?.nomUtilisateur ?? '';
     _contactController.text = user?.contact ?? '';
+   
+
 
     showModalBottomSheet(
       context: context,

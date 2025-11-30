@@ -32,35 +32,36 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
  Future<void> _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        await Provider.of<AuthService>(context, listen: false)
-            .login(_emailController.text.trim(), _passwordController.text);
-        
-        // Si tout va bien, la redirection est gérée par le main.dart (Stream)
-        
-      } on IncompleteProfileException {
-        // C'EST ICI LA CORRECTION : On intercepte l'exception spécifique
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const CompleteSocialProfileScreen(),
-            ),
-          );
-        }
-      } catch (e) {
-        // Les autres erreurs (mot de passe incorrect, serveur down, etc.)
-        final msg = AuthService.getErrorMessage(e);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(msg), backgroundColor: Colors.red),
-          );
-        }
+  if (_formKey.currentState!.validate()) {
+    try {
+      await Provider.of<AuthService>(context, listen: false)
+          .login(_emailController.text.trim(), _passwordController.text);
+      
+      // ✅ CORRECTION ICI : On force la navigation vers l'accueil
+      if (mounted) {
+        // On utilise pushReplacementNamed pour qu'on ne puisse pas revenir au login avec "retour"
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
+      
+    } on IncompleteProfileException {
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CompleteSocialProfileScreen(),
+          ),
+        );
+      }
+    } catch (e) {
+      final msg = AuthService.getErrorMessage(e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: Colors.red),
+        );
       }
     }
   }
-
+}
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
@@ -151,19 +152,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     SocialLoginButtons(
                       onFacebookTap: () async {
-                        try {
-                          await authService.loginWithFacebook();
-                        } on IncompleteProfileException {
-                          if (mounted) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const CompleteSocialProfileScreen(),
-                              ),
-                            );
-                          }
-                        } catch (e) {
+                       try {
+      await authService.loginWithFacebook();
+      // ✅ CORRECTION ICI AUSSI
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
+    } on IncompleteProfileException {
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CompleteSocialProfileScreen(),
+          ),
+        );
+      }
+    }catch (e) {
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
@@ -176,12 +180,18 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                         }
                       },
-                     onGoogleTap: () async {
-  print("🔵 Clic sur Google Login"); // Log 1
-  try {
-    await authService.loginWithGoogle();
-    print("🟢 Login Google Service terminé"); // Log 2
-  } on IncompleteProfileException {
+                   onGoogleTap: () async {
+    print("🔵 Clic sur Google Login");
+    try {
+      await authService.loginWithGoogle();
+      print("🟢 Login Google Service terminé");
+      
+      // ✅ CORRECTION ICI AUSSI
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
+      
+    } on IncompleteProfileException{
     print("🟠 Profil incomplet -> Redirection"); // Log 3
     if (mounted) {
       Navigator.push(
