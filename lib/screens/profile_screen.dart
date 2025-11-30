@@ -88,8 +88,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _prenomController.text = user?.prenom ?? '';
     _usernameController.text = user?.nomUtilisateur ?? '';
     _contactController.text = user?.contact ?? '';
-   
-
 
     showModalBottomSheet(
       context: context,
@@ -157,16 +155,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
               keyboardType: TextInputType.phone,
             ),
 
-            // NOTE : Commune est masquée comme demandé
             const SizedBox(height: 20),
             CustomButton(
               text: "ENREGISTRER",
               onPressed: () {
-                Navigator.pop(ctx); // Fermer le formulaire
-                _showSecurityCheckDialog(
-                  context,
-                  isPasswordChange: false,
-                ); // Ouvrir la sécurité
+                if (_nomController.text.trim().isEmpty || 
+                    _prenomController.text.trim().isEmpty || 
+                    _usernameController.text.trim().isEmpty) {
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Le nom, le prénom et le nom d'utilisateur sont obligatoires."),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                Navigator.pop(ctx);
+
+                // --- NOUVELLE LOGIQUE INTELLIGENTE ---
+                // Si c'est un utilisateur social (Google/FB), on met à jour direct sans demander le mot de passe
+                if (user != null && user.isSocialUser) {
+                   _handleUpdate(isPasswordChange: false, skipPasswordCheck: true);
+                } else {
+                   // Sinon (compte classique), on demande le mot de passe
+                   _showSecurityCheckDialog(context, isPasswordChange: false);
+                }
               },
             ),
             const SizedBox(height: 20),
@@ -225,7 +240,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 20),
 
-            // On réutilise ici tes inputs ou CustomTextField
             const Text(
               "Mot de passe actuel",
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -348,35 +362,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // --- LOGIQUE D'ENVOI API ---
-  Future<void> _handleUpdate({required bool isPasswordChange}) async {
+  Future<void> _handleUpdate({
+    required bool isPasswordChange, 
+    bool skipPasswordCheck = false // <--- PARAMÈTRE OPTIONNEL AJOUTÉ
+  }) async {
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
       final user = auth.currentUser;
 
-      // Si on change le mot de passe, on garde les infos existantes, sinon on prend les champs du formulaire
+      // Si on change le mot de passe, on garde les infos existantes
       String nom = isPasswordChange ? (user?.nom ?? '') : _nomController.text;
-      String prenom = isPasswordChange
-          ? (user?.prenom ?? '')
-          : _prenomController.text;
-      String username = isPasswordChange
-          ? (user?.nomUtilisateur ?? '')
-          : _usernameController.text;
-      String contact = isPasswordChange
-          ? (user?.contact ?? '')
-          : _contactController.text;
+      String prenom = isPasswordChange ? (user?.prenom ?? '') : _prenomController.text;
+      String username = isPasswordChange ? (user?.nomUtilisateur ?? '') : _usernameController.text;
+      String contact = isPasswordChange ? (user?.contact ?? '') : _contactController.text;
 
-      String? newPass =
-          isPasswordChange && _newPasswordController.text.isNotEmpty
+      String? newPass = isPasswordChange && _newPasswordController.text.isNotEmpty
           ? _newPasswordController.text
           : null;
+
+      // --- CORRECTION LOGIQUE ---
+      // Si skipPasswordCheck est vrai (Google/FB), on envoie une chaîne vide
+      // Sinon, on prend ce qu'il y a dans le champ texte
+      String currentPassToSend = skipPasswordCheck ? "" : _currentPasswordController.text;
 
       await auth.updateUserProfile(
         nom: nom,
         prenom: prenom,
         nomUtilisateur: username,
         contact: contact,
-        currentPassword: _currentPasswordController
-            .text, // Celui entré dans la popup ou le sheet
+        currentPassword: currentPassToSend, 
         newPassword: newPass,
       );
 
@@ -384,9 +398,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              isPasswordChange
-                  ? "Mot de passe modifié !"
-                  : "Profil mis à jour !",
+              isPasswordChange ? "Mot de passe modifié !" : "Profil mis à jour !",
             ),
             backgroundColor: Colors.green,
           ),
@@ -394,7 +406,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        // Nettoyage du message d'erreur pour l'utilisateur
         String errorMsg = e.toString().replaceAll('Exception:', '').trim();
         if (errorMsg.contains("401") || errorMsg.contains("incorrect")) {
           errorMsg = "Mot de passe actuel incorrect.";
@@ -521,10 +532,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     // ASTUCE POUR FORCER LE RAFRAICHISSEMENT DE L'IMAGE
-    // On ajoute un timestamp si une URL existe pour éviter le cache persistant après modif
     String? displayPhotoUrl;
     if (user.photoUrl != null && user.photoUrl!.isNotEmpty) {
-       // On vérifie si l'URL contient déjà des paramètres
        final separator = user.photoUrl!.contains('?') ? '&' : '?';
        displayPhotoUrl = "${user.photoUrl}$separator v=${DateTime.now().millisecondsSinceEpoch}";
     }
@@ -561,7 +570,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: CircleAvatar(
                       radius: 50,
                       backgroundColor: Colors.grey[200],
-                      // Si pas d'image, on affiche rien (la couleur de fond) ou une icone
                       backgroundImage: displayPhotoUrl != null 
                           ? NetworkImage(displayPhotoUrl) 
                           : null,
@@ -649,8 +657,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   _buildDivider(),
 
-                  // Masquer "Sécurité" pour les utilisateurs sociaux
-                  // CONDITION POUR MASQUER LA SÉCURITÉ SI SOCIAL USER
+                  // --- Masquer "Sécurité" pour les utilisateurs sociaux ---
                   if (!user.isSocialUser) ...[
                     _ProfileMenuItem(
                       icon: Icons.lock,
@@ -671,14 +678,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   _buildDivider(),
-                  _ProfileMenuItem(
-                    icon: Icons.history_edu,
-                    iconColor: Colors.orange,
-                    title: "Historique de transaction",
-                    onTap: () {},
-                  ),
-                  _buildDivider(),
-                  // --- ICI LE PARRAINAGE ---
+                  
+                  // SUPPRIMÉ : Historique de transaction
+                  
                   _ProfileMenuItem(
                     icon: Icons.people_alt,
                     iconColor: Colors.blueAccent, // Couleur distincte
@@ -686,7 +688,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () => _showReferralDialog(context, user),
                   ),
                   _buildDivider(),
-                  // -------------------------
+                  
                   _ProfileMenuItem(
                     icon: Icons.description,
                     iconColor: Colors.orange,
@@ -698,8 +700,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 20),
 
-            // --- MENU BAS (ACCUEIL, GAIN, PROFIL) EST GÉRÉ PAR MainNavigationScreen ---
-            // Mais on peut ajouter le bouton déconnexion en bas
+            // --- MENU BAS (DECONNEXION) ---
             _ProfileMenuItem(
               icon: Icons.logout,
               iconColor: Colors.red,
@@ -752,7 +753,7 @@ class _ProfileMenuItem extends StatelessWidget {
       leading: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: iconColor.withOpacity(0.15), // Fond de l'icône
+          color: iconColor.withOpacity(0.15),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: iconColor, size: 22),

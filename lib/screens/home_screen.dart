@@ -52,6 +52,15 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     });
+    // ============================================================
+    // 2. AJOUT CAPITAL : C'EST ICI QU'ON ENVOIE LE TOKEN A LA BDD
+    // ============================================================
+    // On lance l'initialisation après un court délai pour être sûr 
+    // que le widget est monté et l'utilisateur connecté.
+    Future.delayed(Duration.zero, () async {
+       await NotificationService().initialiser();
+    });
+    // ============================================================
   }
 
   @override
