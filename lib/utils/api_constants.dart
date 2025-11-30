@@ -12,7 +12,7 @@ class ApiConstants {
 
   // Endpoints User
   static const String userProfile = '/user/profile';
-  static const String updateProfile = '/auth/utilisateur/profile';
+ static const String updateProfile = '/user/profile';
   static const String completeProfile = '/auth/utilisateur/complete-profile';
   static const String uploadProfileImage = '/user/upload-profile-image';
 
