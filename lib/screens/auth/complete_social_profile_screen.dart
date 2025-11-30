@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
+import '../../services/notification_service.dart'; // ✅ Import présent
 import '../../models/ville.dart';
 import '../../utils/api_constants.dart';
 import '../../utils/colors.dart';
@@ -73,19 +74,6 @@ class _CompleteSocialProfileScreenState
       _selectedCommune = null;
     });
     try {
-      // Assuming the endpoint is /communes?ville=villeId or similar based on previous code
-      // Previous code used: '/villes/$villeId/communes'
-      // But ApiConstants.communes is '/communes'
-      // I'll assume it takes a query param or I should stick to what was working if I knew.
-      // RegisterScreen used: queryParameters: {'ville': villeNom}
-      // But here we have villeId.
-      // Let's try to find the Ville object by ID and use its name if needed, or use ID.
-      // The previous code used '/villes/$villeId/communes'.
-      // If that endpoint exists, I should use it.
-      // But I defined ApiConstants.communes = '/communes'.
-      // I'll stick to what RegisterScreen did: queryParameters: {'ville': villeNom}
-      // So I need to find the ville name from the ID.
-
       final ville = _villes.firstWhere((v) => v.id.toString() == villeId);
 
       final response = await _apiService.get(
@@ -148,6 +136,7 @@ class _CompleteSocialProfileScreenState
       final authService = Provider.of<AuthService>(context, listen: false);
 
       try {
+        // 1. Enregistrement du profil
         await authService.completeProfile(
           commune: _selectedCommune!,
           dateNaissance: _dateController.text,
@@ -155,13 +144,24 @@ class _CompleteSocialProfileScreenState
           genre: _selectedGenre,
         );
 
-        // ✅ CORRECTION ICI :
-        // Au lieu de faire un popUntil (qui attend que AuthWrapper réagisse),
-        // on force la navigation vers /home et on vide l'historique arrière.
+        // ============================================================
+        // ✅ CORRECTION AJOUTÉE ICI : ENVOI DU TOKEN FCM
+        // ============================================================
+        try {
+          print("💾 Profil complété, tentative de sauvegarde du token FCM...");
+          await NotificationService().forceRefreshToken();
+          print("✅ Token FCM sauvegardé avec succès.");
+        } catch (e) {
+          print("⚠️ Erreur silencieuse lors de l'envoi du token FCM: $e");
+          // On ne bloque pas la navigation si ça échoue, mais on logue l'erreur
+        }
+        // ============================================================
+
+        // 2. Navigation vers l'accueil
         if (mounted) {
           Navigator.of(context).pushNamedAndRemoveUntil(
             '/home', 
-            (route) => false // Ceci supprime toutes les pages précédentes (Login, etc.)
+            (route) => false 
           );
         }
       } catch (e) {

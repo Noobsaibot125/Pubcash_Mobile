@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart'; // Pour formater la date
+import '../../utils/exceptions.dart'; // <--- INDISPENSABLE pour IncompleteProfileException
+import 'complete_social_profile_screen.dart'; // <--- INDISPENSABLE pour la navigation
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import '../../models/ville.dart';
@@ -375,17 +377,72 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 15),
 
                     // --- BOUTONS SOCIAUX ---
-                    SocialLoginButtons(
+                     SocialLoginButtons(
                       onFacebookTap: () async {
                         try {
                           await authService.loginWithFacebook();
-                          // La navigation vers complete profile se fait via main.dart si Exception levée
-                        } catch (e) { /* Géré ailleurs */ }
+                          
+                          // 1. Succès -> On va à l'accueil et on efface l'historique
+                          if (mounted) {
+                            Navigator.of(context).pushNamedAndRemoveUntil(
+                              '/home', 
+                              (route) => false
+                            );
+                          }
+                        } on IncompleteProfileException {
+                          // 2. Exception Profil -> On va à la page de complétion
+                          if (mounted) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const CompleteSocialProfileScreen(),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          // 3. Autre erreur -> On l'affiche
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Erreur Facebook: $e"), 
+                                backgroundColor: Colors.red
+                              ),
+                            );
+                          }
+                        }
                       },
                       onGoogleTap: () async {
                         try {
                           await authService.loginWithGoogle();
-                        } catch (e) { /* Géré ailleurs */ }
+                          
+                          // 1. Succès -> On va à l'accueil et on efface l'historique
+                          if (mounted) {
+                            Navigator.of(context).pushNamedAndRemoveUntil(
+                              '/home', 
+                              (route) => false
+                            );
+                          }
+                        } on IncompleteProfileException {
+                          // 2. Exception Profil -> On va à la page de complétion
+                          if (mounted) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const CompleteSocialProfileScreen(),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          // 3. Autre erreur -> On l'affiche
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Erreur Google: $e"), 
+                                backgroundColor: Colors.red
+                              ),
+                            );
+                          }
+                        }
                       },
                     ),
 

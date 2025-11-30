@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'forgot_password_screen.dart';
 import '../../services/auth_service.dart';
+import '../../services/notification_service.dart'; // <--- N'OUBLIE PAS L'IMPORT ICI
 import '../../utils/colors.dart';
 import '../../utils/validators.dart';
 import '../../widgets/custom_button.dart';
@@ -31,37 +32,47 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
- Future<void> _handleLogin() async {
-  if (_formKey.currentState!.validate()) {
-    try {
-      await Provider.of<AuthService>(context, listen: false)
-          .login(_emailController.text.trim(), _passwordController.text);
-      
-      // ✅ CORRECTION ICI : On force la navigation vers l'accueil
-      if (mounted) {
-        // On utilise pushReplacementNamed pour qu'on ne puisse pas revenir au login avec "retour"
-        Navigator.of(context).pushReplacementNamed('/home');
-      }
-      
-    } on IncompleteProfileException {
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const CompleteSocialProfileScreen(),
-          ),
-        );
-      }
-    } catch (e) {
-      final msg = AuthService.getErrorMessage(e);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg), backgroundColor: Colors.red),
-        );
+  Future<void> _handleLogin() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        // 1. Connexion
+        await Provider.of<AuthService>(context, listen: false)
+            .login(_emailController.text.trim(), _passwordController.text);
+        
+        // ✅ 2. SAUVEGARDE TOKEN FCM (CRUCIAL)
+        // Maintenant qu'on a un token d'auth, on envoie le token FCM
+        try {
+          await NotificationService().forceRefreshToken();
+          print("✅ Token FCM mis à jour après login");
+        } catch (e) {
+          print("⚠️ Erreur mise à jour FCM: $e");
+        }
+
+        // 3. Navigation
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/home');
+        }
+        
+      } on IncompleteProfileException {
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const CompleteSocialProfileScreen(),
+            ),
+          );
+        }
+      } catch (e) {
+        final msg = AuthService.getErrorMessage(e);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), backgroundColor: Colors.red),
+          );
+        }
       }
     }
   }
-}
+
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
@@ -120,21 +131,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       validator: Validators.validatePassword,
                     ),
 
-                   Align(
-    alignment: Alignment.centerRight,
-    child: TextButton(
-      onPressed: () {
-        Navigator.push(
-          context, 
-          MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())
-        );
-      },
-      child: const Text(
-        "Mot de passe oublié ?",
-        style: TextStyle(color: AppColors.textMuted),
-      ),
-    ),
-  ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context, 
+                            MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())
+                          );
+                        },
+                        child: const Text(
+                          "Mot de passe oublié ?",
+                          style: TextStyle(color: AppColors.textMuted),
+                        ),
+                      ),
+                    ),
 
                     const SizedBox(height: 20),
 
@@ -152,62 +163,66 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     SocialLoginButtons(
                       onFacebookTap: () async {
-                       try {
-      await authService.loginWithFacebook();
-      // ✅ CORRECTION ICI AUSSI
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/home');
-      }
-    } on IncompleteProfileException {
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const CompleteSocialProfileScreen(),
-          ),
-        );
-      }
-    }catch (e) {
+                        try {
+                          await authService.loginWithFacebook();
+                          
+                          // ✅ Mettre à jour le token FCM après login FB
+                          await NotificationService().forceRefreshToken();
+
+                          if (mounted) {
+                            Navigator.of(context).pushReplacementNamed('/home');
+                          }
+                        } on IncompleteProfileException {
+                          if (mounted) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const CompleteSocialProfileScreen(),
+                              ),
+                            );
+                          }
+                        } catch (e) {
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text(
-                                  'Erreur connexion: ${e.toString()}',
-                                ),
+                                content: Text('Erreur connexion: ${e.toString()}'),
                                 backgroundColor: Colors.red,
                               ),
                             );
                           }
                         }
                       },
-                   onGoogleTap: () async {
-    print("🔵 Clic sur Google Login");
-    try {
-      await authService.loginWithGoogle();
-      print("🟢 Login Google Service terminé");
-      
-      // ✅ CORRECTION ICI AUSSI
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/home');
-      }
-      
-    } on IncompleteProfileException{
-    print("🟠 Profil incomplet -> Redirection"); // Log 3
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const CompleteSocialProfileScreen()),
-      );
-    }
-  } catch (e) {
-    print("🔴 Erreur Google Login: $e"); // Log 4
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
-      );
-    }
-  }
-},
+                      onGoogleTap: () async {
+                        print("🔵 Clic sur Google Login");
+                        try {
+                          await authService.loginWithGoogle();
+                          print("🟢 Login Google terminé");
+
+                          // ✅ Mettre à jour le token FCM après login Google
+                          await NotificationService().forceRefreshToken();
+
+                          if (mounted) {
+                            Navigator.of(context).pushReplacementNamed('/home');
+                          }
+                        } on IncompleteProfileException {
+                          print("🟠 Profil incomplet -> Redirection");
+                          if (mounted) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const CompleteSocialProfileScreen(),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          print("🔴 Erreur Google Login: $e");
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+                            );
+                          }
+                        }
+                      },
                     ),
 
                     const SizedBox(height: 40),
