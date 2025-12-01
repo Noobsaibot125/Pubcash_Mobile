@@ -3,6 +3,9 @@ class ApiConstants {
   static const String baseUrl = 'https://pub-cash.com/api';
   static const String apiUrl = '$baseUrl';
 
+  // Socket.IO URL (sans /api pour WebSocket)
+  static const String socketUrl = 'https://pub-cash.com';
+
   // Endpoints Auth
   static const String login = '/auth/utilisateur/login';
   static const String register = '/auth/utilisateur/register';
@@ -12,7 +15,7 @@ class ApiConstants {
 
   // Endpoints User
   static const String userProfile = '/user/profile';
- static const String updateProfile = '/user/profile';
+  static const String updateProfile = '/user/profile';
   static const String completeProfile = '/auth/utilisateur/complete-profile';
   static const String uploadProfileImage = '/user/upload-profile-image';
 

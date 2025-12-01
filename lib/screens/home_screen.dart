@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../models/promotion.dart';
 import '../utils/colors.dart';
+import '../services/socket_service.dart';
 import '../widgets/video_card.dart';
 import 'video_player_screen.dart';
 import 'notifications_screen.dart';
@@ -31,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Variable pour le badge de notification
   int _unreadCount = 0;
   StreamSubscription<int>? _badgeSubscription; // Pour écouter les notifs en temps réel
+  StreamSubscription<Map<String, dynamic>>? _socketSubscription;
   
   bool _loading = true;
   
@@ -41,9 +43,10 @@ class _HomeScreenState extends State<HomeScreen> {
   // Pour cacher/montrer le solde
   bool _showBalance = true;
 
-  @override
+   @override
   void initState() {
     super.initState();
+    
     // On s'abonne au flux de notifications dès le lancement
     _badgeSubscription = NotificationService().unreadCountStream.listen((count) {
       if (mounted) {
@@ -52,6 +55,40 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     });
+    
+    // ============================================================
+    // SOCKET.IO : Connexion et écoute des nouvelles vidéos en temps réel
+    // ============================================================
+    SocketService().connect();
+    
+    _socketSubscription = SocketService().newVideoStream.listen((videoData) {
+      if (!mounted) return;
+      
+      print('🎬 Nouvelle vidéo reçue dans HomeScreen: ${videoData['titre']}');
+      
+      // Vérifier si la vidéo correspond au filtre actuel
+      bool shouldShow = _shouldShowVideo(videoData);
+      
+      if (shouldShow) {
+        try {
+          // Convertir les données Socket.IO en objet Promotion
+          final newPromotion = Promotion.fromJson(videoData);
+          
+          setState(() {
+            // Ajouter la nouvelle vidéo en haut de la liste
+            _promotions.insert(0, newPromotion);
+          });
+          
+          print('✅ Vidéo ajoutée à la liste: ${newPromotion.titre}');
+        } catch (e) {
+          print('❌ Erreur lors de la conversion de la vidéo: $e');
+        }
+      } else {
+        print('⏭️ Vidéo ignorée (ne correspond pas au filtre actuel)');
+      }
+    });
+    // ============================================================
+    
     // ============================================================
     // 2. AJOUT CAPITAL : C'EST ICI QU'ON ENVOIE LE TOKEN A LA BDD
     // ============================================================
@@ -73,11 +110,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
-  void dispose() {
-    // Très important : on coupe l'écoute quand on quitte l'écran
-    _badgeSubscription?.cancel();
-    super.dispose();
-  }
+void dispose() {
+  // Très important : on coupe l'écoute quand on quitte l'écran
+  _badgeSubscription?.cancel();
+  _socketSubscription?.cancel();
+  // Note: On ne déconnecte pas le socket car d'autres écrans pourraient l'utiliser
+  super.dispose();
+}
 
   Future<void> _loadData() async {
     if (!mounted) return;
@@ -429,4 +468,28 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+  bool _shouldShowVideo(Map<String, dynamic> videoData) {
+  final ciblageCommune = videoData['ciblage_commune'] as String?;
+  
+  // Récupérer la commune de l'utilisateur
+  final authService = Provider.of<AuthService>(context, listen: false);
+  final userCommune = authService.currentUser?.commune;
+  
+  switch (_filter) {
+    case 'toutes':
+      // Afficher TOUT : vidéos nationales + vidéos de ma commune
+      return ciblageCommune == 'toutes' || ciblageCommune == userCommune;
+      
+    case 'ma_commune':
+      // Afficher uniquement les vidéos qui ciblent MA commune
+      return ciblageCommune == userCommune;
+      
+    case 'toutes_communes':
+      // Afficher uniquement les vidéos nationales
+      return ciblageCommune == 'toutes';
+      
+    default:
+      return true; // Par défaut, afficher
+  }
+}
 }

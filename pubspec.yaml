@@ -11,24 +11,15 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # --- Librairies manquantes ajoutées ---
+  dio: ^5.4.0
+  socket_io_client: ^2.0.3+1
+  flutter_svg: ^2.0.9
+  # --------------------------------------
+
   # UI & Design
   cupertino_icons: ^1.0.8
   google_fonts: ^6.1.0
-  flutter_svg: ^2.0.9
-  lottie: ^3.0.0
-  
-  # State Management
-  provider: ^6.1.1
-  
-  # Network
-  http: ^1.1.2
-  dio: ^5.4.0
-  
-  # Storage
-  shared_preferences: ^2.2.2
-  flutter_secure_storage: ^9.0.0
-  path_provider: ^2.1.1  # <--- AJOUTE CETTE LIGNE ICI (très important)
-  # Validation
   email_validator: ^2.1.17
   intl: ^0.18.1
   
@@ -44,7 +35,7 @@ dependencies:
   # Formulaires
   dropdown_search: ^5.0.6
   
-  # Vidé & Média
+  # Vidéo & Média
   video_player: ^2.8.7
   chewie: ^1.8.1
   cached_network_image: ^3.3.1
@@ -72,7 +63,7 @@ flutter:
     - assets/images/
     - assets/animations/
 
-# Configuration des icones (doit être tout à gauche, sans espace avant)
+# Configuration des icones
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
