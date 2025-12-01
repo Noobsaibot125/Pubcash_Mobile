@@ -1,7 +1,7 @@
 import '../models/promotion.dart';
 import 'api_service.dart';
 import '../utils/api_constants.dart'; // N'oublie pas d'importer tes constantes
-
+import '../utils/device_utils.dart';
 class PromotionService {
   final ApiService _apiService = ApiService();
 
@@ -101,6 +101,35 @@ class PromotionService {
     } catch (e) {
       // On relance l'erreur pour l'afficher dans l'UI (ex: solde insuffisant)
       rethrow;
+    }
+  }
+  Future<void> markPromotionAsViewed(int promoId) async {
+    try {
+      // 1. On récupère l'ID unique de l'appareil
+      String? deviceId = await DeviceUtils.getDeviceId();
+
+      // 2. On l'envoie au serveur
+      await _apiService.post(
+        '${ApiConstants.promotions}/$promoId/view', // Route: /api/promotions/:id/view
+        data: {
+          'device_id': deviceId, // <--- C'est ici que la magie opère
+        },
+      );
+      print("Vue validée avec succès pour l'appareil: $deviceId");
+      
+    } catch (e) {
+      print("Erreur validation vue: $e");
+      // C'est ici que l'erreur 403 (Fraude) sera attrapée si l'appareil a déjà vu la vidéo
+      rethrow; 
+    }
+  }
+   // === NOUVEAU : ANNULER PROMOTION (Masquer) ===
+  Future<void> cancelPromotion(int promoId) async {
+    try {
+      await _apiService.post('${ApiConstants.promotions}/$promoId/cancel');
+    } catch (e) {
+      print("Erreur lors de l'annulation de la promotion: $e");
+      // On ne rethrow pas forcément ici pour ne pas bloquer la fermeture de l'écran
     }
   }
 }

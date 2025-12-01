@@ -32,8 +32,9 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
   bool _hasLiked = false;
   bool _hasShared = false;
   
-  // Timer optionnel si tu veux afficher un compte à rebours, 
-  // sinon il sert juste à rafraichir l'UI
+  // --- CORRECTION 1 : Ajout de la variable manquante ---
+  bool _isCancelling = false; 
+
   Timer? _timer;
 
   @override
@@ -44,7 +45,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
         setState(() {
           _isInitialized = true;
         });
-        _controller.play(); // Lecture automatique
+        _controller.play();
         _startTimer();
       }).catchError((error) {
         print("Erreur chargement vidéo: $error");
@@ -55,11 +56,9 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      // On force la lecture si jamais ça se met en pause tout seul
       if (_controller.value.isInitialized && !_controller.value.isPlaying && !_videoEnded) {
          _controller.play();
       }
-      // On rafraichit l'état pour la barre de progression
       if (mounted) setState(() {});
     });
   }
@@ -77,9 +76,6 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
       }
     }
   }
-
-  // ... (Tes méthodes _handleLike, _handleShare, _showQuiz, _finishProcess restent identiques) ...
-  // Je les remets ici pour que tu aies le fichier complet sans erreur
 
   Future<void> _handleLike() async {
     try {
@@ -125,7 +121,6 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
         promotion: widget.promotion,
         onFinish: (isCorrect) async {
           Navigator.pop(ctx);
-          
           if (isCorrect) {
              final success = await _promotionService.submitQuiz(
                widget.promotion.gameId!, 
@@ -152,6 +147,29 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
     Navigator.pop(context);
   }
 
+  // --- Fonction pour gérer la fermeture ---
+  Future<void> _handleClose() async {
+    // Si la vidéo est terminée, la croix sert juste à fermer normalement
+    if (_videoEnded) {
+       Navigator.pop(context);
+       return;
+    }
+
+    // Si la vidéo est en cours, on annule
+    setState(() => _isCancelling = true);
+    
+    // Appel API pour marquer comme 'annulé'
+    await _promotionService.cancelPromotion(widget.promotion.id);
+    
+    if (!mounted) return;
+    
+    // On appelle onVideoViewed pour forcer le rafraîchissement de la Home
+    // et faire disparaître la vidéo de la liste
+    widget.onVideoViewed(); 
+    
+    Navigator.pop(context);
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -165,12 +183,11 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. Lecteur Vidéo (Sans contrôles tactiles)
+          // 1. Lecteur Vidéo
           Center(
             child: _isInitialized
                 ? AspectRatio(
                     aspectRatio: _controller.value.aspectRatio,
-                    // IgnorePointer empêche de cliquer sur la vidéo pour mettre pause
                     child: IgnorePointer( 
                       ignoring: true, 
                       child: VideoPlayer(_controller),
@@ -223,17 +240,21 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
               ),
             ),
 
-          // 3. Bouton Fermer
+          // 3. Bouton Fermer (CORRIGÉ)
           Positioned(
             top: 40,
             left: 20,
-            child: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white, size: 30),
-              onPressed: () => Navigator.pop(context),
-            ),
+            // Si on annule, on affiche un chargement, sinon le bouton croix
+            child: _isCancelling 
+              ? const CircularProgressIndicator(color: Colors.white)
+              : IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                  // On appelle la fonction _handleClose au lieu de Navigator.pop direct
+                  onPressed: _handleClose, 
+                ),
           ),
           
-          // 4. Indicateur de progression (Non interactif)
+          // 4. Indicateur de progression
            if (_isInitialized && !_videoEnded)
             Positioned(
               bottom: 30,
@@ -241,7 +262,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
               right: 20,
               child: VideoProgressIndicator(
                 _controller, 
-                allowScrubbing: false, // INTERDIT D'AVANCER
+                allowScrubbing: false,
                 colors: const VideoProgressColors(
                   playedColor: AppColors.primary,
                   backgroundColor: Colors.grey,
