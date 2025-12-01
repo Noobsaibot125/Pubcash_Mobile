@@ -6,7 +6,22 @@ import '../models/game.dart';
 class GameService {
   final ApiService _apiService = ApiService();
 
-  // Récupérer les points de l'utilisateur
+  // --- NOUVEAU : Récupère les points ET le statut de la roue ---
+  Future<Map<String, dynamic>> getUserGameData() async {
+    try {
+      final response = await _apiService.get(ApiConstants.gamePoints);
+      return {
+        'points': response.data['points'] ?? 0,
+        // On s'assure que c'est bien un booléen (true/false)
+        'wheel_spun': response.data['wheel_spun'] == true || response.data['wheel_spun'] == 1, 
+      };
+    } catch (e) {
+      print("Erreur getUserGameData: $e");
+      return {'points': 0, 'wheel_spun': false};
+    }
+  }
+
+  // Ancienne méthode (gardée pour compatibilité si besoin ailleurs)
   Future<int> getPoints() async {
     try {
       final response = await _apiService.get(ApiConstants.gamePoints);

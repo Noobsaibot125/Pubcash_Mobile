@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/notification_model.dart';
 import 'api_service.dart';
+import 'package:pubcash_mobile/main.dart'; // Adapte selon le nom de ton projet
 import '../../services/notification_service.dart';
 
 class NotificationService {
@@ -24,66 +25,54 @@ class NotificationService {
   Stream<int> get unreadCountStream => _unreadCountController.stream;
 
   /// Initialiser le service de notifications
-  Future<void> initialiser() async {
+    Future<void> initialiser() async {
     if (_initialized) return;
 
     try {
-      // 1. Initialiser Firebase
       await Firebase.initializeApp();
 
-      // 2. Demander la permission
       NotificationSettings settings = await _fcm.requestPermission(
         alert: true,
         badge: true,
         sound: true,
-        provisional: false, // Important pour Android 13+
+        provisional: false,
       );
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
         print('✅ Permission notifications accordée');
 
-        // --- 👇 C'EST ICI QU'IL MANQUAIT LE CODE IMPORTANT 👇 ---
-        // Configuration pour iOS : Afficher la notif même app ouverte
+        // iOS Configuration
         await _fcm.setForegroundNotificationPresentationOptions(
           alert: true, 
           badge: true,
           sound: true,
         );
-        // ---------------------------------------------------------
 
-        // 3. Configurer les notifications locales
+        // Configuration Locale
         await _configurerNotificationsLocales();
 
-        // 4. Récupérer le token (sans l'envoyer tout de suite si pas login, 
-        // mais le listener s'en charge si ça change)
+        // Token
         final token = await _fcm.getToken();
         print("🔑 Token actuel : $token");
 
-        // 5. Écouter les changements de token
         _fcm.onTokenRefresh.listen(_envoyerTokenAuBackend);
 
-        // 6. Gérer les notifications en premier plan
+        // Écoute PREMIER PLAN
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
           print("📡 Message reçu en premier plan : ${message.notification?.title}");
           _afficherNotificationLocale(message);
         });
 
-        // 7. Gérer les clics sur notifications
+        // Clics
         FirebaseMessaging.onMessageOpenedApp.listen(_gererClicNotification);
-
-        // 8. Gérer les notifications reçues quand l'app était fermée
         FirebaseMessaging.instance.getInitialMessage().then((message) {
           if (message != null) {
             _gererClicNotification(message);
           }
         });
 
-        // 9. Initialiser le compteur de badge
         await refreshUnreadCount();
-
         _initialized = true;
-      } else {
-        print('❌ Permission notifications refusée');
       }
     } catch (e) {
       print('❌ Erreur initialisation notifications: $e');
@@ -92,9 +81,9 @@ class NotificationService {
 
   /// Configurer les notifications locales (affichage en premier plan)
   Future<void> _configurerNotificationsLocales() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    // ⚠️ CORRECTION ICI : On utilise launcher_icon car c'est le fichier qui existe
+    const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
     
-    // Configuration iOS pour permettre l'affichage app ouverte
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -105,19 +94,23 @@ class NotificationService {
       android: androidSettings,
       iOS: iosSettings,
     );
-
-    await _localNotifications.initialize(
+ await _localNotifications.initialize(
       initSettings,
+      // 👇👇👇 C'EST ICI LA MODIFICATION IMPORTANTE (Clic App Ouverte) 👇👇👇
       onDidReceiveNotificationResponse: (details) {
-        print('Notification locale cliquée: ${details.payload}');
+        print('🖱️ Clic sur notification locale (App ouverte)');
+        // On utilise la clé globale pour aller à l'accueil
+        navigatorKey.currentState?.pushNamedAndRemoveUntil('/home', (route) => false);
       },
+      // 👆👆👆 FIN MODIFICATION 👆👆👆
     );
 
-    const androidChannel = AndroidNotificationChannel(
-      'pubcash_notifications',
+   const androidChannel = AndroidNotificationChannel(
+      'pubcash_notifications_v3', // <--- PASSAGE EN V3 POUR FORCER LA MISE A JOUR
       'Notifications PubCash',
       description: 'Notifications pour les gains, retraits et nouvelles vidéos',
-      importance: Importance.max, // --- 👇 IMPORTANT : Mettre MAX ici ---
+      importance: Importance.max,
+      playSound: true,
     );
 
     await _localNotifications
@@ -129,38 +122,20 @@ class NotificationService {
   /// Envoyer le token FCM au backend
   Future<void> _envoyerTokenAuBackend(String token) async {
     try {
-      print("🚀 Envoi du token au backend...");
       await _apiService.post('/notifications/token', data: {'token': token});
-      print("✅ Token FCM sauvegardé au backend");
-    } catch (e) {
-      // On ignore l'erreur silencieusement si l'user n'est pas encore connecté
-      // Car forceRefreshToken() le fera plus tard
-      print("ℹ️ Token non envoyé (Probablement pas connecté): $e");
-    }
+    } catch (e) { print("ℹ️ Token non envoyé: $e"); }
   }
 
-  /// Force l'envoi du token actuel (Appelé après Login)
   Future<void> forceRefreshToken() async {
     try {
       if (!_initialized) await Firebase.initializeApp();
-      
       final token = await _fcm.getToken();
-      if (token != null) {
-        print("🔄 Envoi forcé du token FCM...");
-        // Ici on veut voir l'erreur si ça échoue
-        final response = await _apiService.post('/notifications/token', data: {'token': token});
-        if (response.statusCode == 200 || response.statusCode == 201) {
-           print("✅ Token mis à jour avec succès !");
-        }
-      }
-    } catch (e) {
-      print("❌ Impossible de rafraîchir le token FCM : $e");
-    }
+      if (token != null) await _apiService.post('/notifications/token', data: {'token': token});
+    } catch (e) { print("❌ Refresh token error: $e"); }
   }
 
   /// Afficher une notification locale quand l'app est au premier plan
   Future<void> _afficherNotificationLocale(RemoteMessage message) async {
-    // 1. Mettre à jour le badge
     await refreshUnreadCount();
 
     final notification = message.notification;
@@ -173,17 +148,18 @@ class NotificationService {
           notification.body,
           const NotificationDetails(
             android: AndroidNotificationDetails(
-              'pubcash_notifications',
+              'pubcash_notifications_v3', // <--- DOIT CORRESPONDRE AU V3
               'Notifications PubCash',
               channelDescription: 'Notifications importantes',
-              // --- 👇 IMPORTANT : Importance MAX et Priorité HIGH pour le POPUP ---
-              importance: Importance.max, 
+              importance: Importance.max,
               priority: Priority.high,
-              icon: '@mipmap/ic_launcher',
+              icon: '@mipmap/launcher_icon', // <--- UTILISATION DE LA BONNE ICONE
               playSound: true,
+              enableVibration: true,
+              visibility: NotificationVisibility.public,
             ),
             iOS: DarwinNotificationDetails(
-              presentAlert: true, // Force le popup sur iOS
+              presentAlert: true,
               presentBadge: true,
               presentSound: true,
             ),
@@ -201,6 +177,9 @@ class NotificationService {
     print('Notification cliquée: ${message.data}');
     // Idéalement ici, on navigue vers l'écran concerné et on rafraichit le badge
     refreshUnreadCount();
+     Future.delayed(const Duration(milliseconds: 500), () {
+      navigatorKey.currentState?.pushNamedAndRemoveUntil('/home', (route) => false);
+    });
   }
 
   /// Récupérer les notifications depuis l'API

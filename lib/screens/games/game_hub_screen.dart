@@ -14,7 +14,9 @@ class GameHubScreen extends StatefulWidget {
 
 class _GameHubScreenState extends State<GameHubScreen> {
   final GameService _gameService = GameService();
+  
   int _points = 0;
+  bool _wheelPlayed = false; // NOUVEAU : Pour savoir si la roue est jouée
   List<Game> _games = [];
   bool _isLoading = true;
 
@@ -27,11 +29,15 @@ class _GameHubScreenState extends State<GameHubScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final points = await _gameService.getPoints();
+      // 1. On charge les infos utilisateur (Points + Roue)
+      final userData = await _gameService.getUserGameData();
+      // 2. On charge les jeux
       final games = await _gameService.getGames(type: 'puzzle');
+      
       if (mounted) {
         setState(() {
-          _points = points;
+          _points = userData['points'];
+          _wheelPlayed = userData['wheel_spun']; // Mise à jour du statut
           _games = games;
           _isLoading = false;
         });
@@ -109,7 +115,7 @@ class _GameHubScreenState extends State<GameHubScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(color: Colors.black12, blurRadius: 10),
                           ],
                         ),
@@ -180,17 +186,25 @@ class _GameHubScreenState extends State<GameHubScreen> {
     );
   }
 
- Widget _build3DWheelCard() {
+  // --- WIDGET ROUE MODIFIÉ ---
+  Widget _build3DWheelCard() {
     return GestureDetector(
-      // --- CORRECTION ICI : NAVIGATION ACTIVÉE ---
-      onTap: () async {
-        print("Navigation vers la roue de la fortune");
-        final result = await Navigator.push(
-          context, 
-          MaterialPageRoute(builder: (_) => const WheelGameScreen())
-        );
-        if (result == true) _loadData();
-      },
+      // Si déjà joué, on affiche un message, sinon on navigue
+      onTap: _wheelPlayed 
+          ? () {
+               ScaffoldMessenger.of(context).showSnackBar(
+                 const SnackBar(content: Text("Vous avez déjà tourné la roue aujourd'hui !")),
+               );
+            }
+          : () async {
+              print("Navigation vers la roue de la fortune");
+              final result = await Navigator.push(
+                context, 
+                MaterialPageRoute(builder: (_) => const WheelGameScreen())
+              );
+              // Si on revient de la roue, on recharge les données pour mettre à jour l'affichage
+              if (result == true || result == null) _loadData();
+            },
       child: Container(
         height: 200,
         decoration: BoxDecoration(
@@ -208,13 +222,20 @@ class _GameHubScreenState extends State<GameHubScreen> {
           child: Stack(
             children: [
               Positioned.fill(
-                child: Image.asset(
-                  'assets/images/Wheel.png', 
-                  fit: BoxFit.cover,
-                  errorBuilder: (c, e, s) => const Center(child: Icon(Icons.error, color: Colors.white)),
+                // APPLICATION DU FILTRE NOIR & BLANC SI JOUÉ
+                child: ColorFiltered(
+                  colorFilter: _wheelPlayed
+                      ? const ColorFilter.mode(Colors.grey, BlendMode.saturation) // Grayscale
+                      : const ColorFilter.mode(Colors.transparent, BlendMode.multiply), // Normal
+                  child: Image.asset(
+                    'assets/images/Wheel.png', 
+                    fit: BoxFit.cover,
+                    errorBuilder: (c, e, s) => const Center(child: Icon(Icons.error, color: Colors.white)),
+                  ),
                 ),
               ),
-              // Texte par dessus (optionnel, tu peux le retirer si l'image contient déjà le texte)
+              
+              // Texte par dessus
               Padding(
                 padding: const EdgeInsets.all(25),
                 child: Column(
@@ -231,13 +252,41 @@ class _GameHubScreenState extends State<GameHubScreen> {
                       "ROUE DE LA FORTUNE",
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
                     ),
-                    const Text(
-                      "Tentez votre chance !",
-                      style: TextStyle(color: Colors.white70),
+                    Text(
+                      _wheelPlayed ? "Revenez demain" : "Tentez votre chance !",
+                      style: const TextStyle(color: Colors.white70),
                     ),
                   ],
                 ),
-              )
+              ),
+
+              // OVERLAY "COCHÉ" (CHECKMARK) SI JOUÉ
+              if (_wheelPlayed)
+                Container(
+                  color: Colors.black54, // Voile sombre
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          color: Colors.greenAccent,
+                          size: 60,
+                        ),
+                        SizedBox(height: 10),
+                        Text(
+                          "DÉJÀ JOUÉ",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                            fontSize: 16
+                          ),
+                        )
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
