@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
+bool _obscurePassword = true;
   @override
   void dispose() {
     _emailController.dispose();
@@ -115,20 +115,52 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 40),
 
-                    CustomTextField(
-                      hintText: "Email",
-                      prefixIcon: Icons.email_outlined,
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      validator: Validators.validateEmail,
-                    ),
+                   CustomTextField(
+  hintText: "Email ou Numéro",
+  prefixIcon: Icons.person_outline, // Icône plus générique que l'email
+  controller: _emailController, // Tu peux garder ce nom ou le renommer _identifierController
+  keyboardType: TextInputType.emailAddress, // Ce clavier affiche le @ et les chiffres, c'est parfait pour les deux
+  validator: (value) {
+    if (value == null || value.isEmpty) {
+      return "Veuillez entrer votre email ou numéro";
+    }
 
+    // 1. Vérification Email (Regex standard)
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    // 2. Vérification Numéro (Uniquement des chiffres, min 10 caractères)
+    final phoneRegex = RegExp(r'^[0-9]{10,}$'); 
+
+    // Si ce n'est NI un email NI un numéro valide
+    if (!emailRegex.hasMatch(value) && !phoneRegex.hasMatch(value)) {
+      return "Entrez un email valide ou un numéro (ex: 0707...)";
+    }
+    
+    return null;
+  },
+),
+                  const SizedBox(height: 20), // Un peu d'espace
+
+                    // 2. REMPLACE LE CHAMP MOT DE PASSE PAR CELUI-CI
                     CustomTextField(
                       hintText: "Mot de passe",
                       prefixIcon: Icons.lock_outline,
-                      obscureText: true,
                       controller: _passwordController,
+                      obscureText: _obscurePassword, // Utilise la variable
                       validator: Validators.validatePassword,
+                      // Ajout de l'icône "Oeil" à droite
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword 
+                              ? Icons.visibility_outlined 
+                              : Icons.visibility_off_outlined,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
                     ),
 
                     Align(

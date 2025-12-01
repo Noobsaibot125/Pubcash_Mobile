@@ -39,7 +39,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _selectedVilleNom;
   String? _selectedCommune;
   String _selectedGenre = '';
-  
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   List<Ville> _villes = [];
   List<String> _communes = [];
   bool _isLoadingCommunes = false;
@@ -256,19 +257,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       keyboardType: TextInputType.emailAddress,
                       validator: Validators.validateEmail,
                     ),
-                    CustomTextField(
+                   CustomTextField(
                       hintText: "Mot de passe",
                       prefixIcon: Icons.lock_outline,
-                      obscureText: true,
                       controller: _passwordController,
+                      obscureText: _obscurePassword, // Variable 1
                       validator: Validators.validatePassword,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword 
+                              ? Icons.visibility_outlined 
+                              : Icons.visibility_off_outlined,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
                     ),
+
+                    // 3. REMPLACE LE CHAMP CONFIRMER MOT DE PASSE
                     CustomTextField(
                       hintText: "Confirmer mot de passe",
                       prefixIcon: Icons.lock_outline,
-                      obscureText: true,
                       controller: _confirmPasswordController,
+                      obscureText: _obscureConfirmPassword, // Variable 2
                       validator: (v) => Validators.validateConfirmPassword(v, _passwordController.text),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword 
+                              ? Icons.visibility_outlined 
+                              : Icons.visibility_off_outlined,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscureConfirmPassword = !_obscureConfirmPassword;
+                          });
+                        },
+                      ),
                     ),
 
                     // --- DATE NAISSANCE ---

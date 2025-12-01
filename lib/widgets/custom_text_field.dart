@@ -4,14 +4,18 @@ import '../utils/colors.dart';
 class CustomTextField extends StatelessWidget {
   final String hintText;
   final IconData? prefixIcon;
-  final IconData? suffixIcon;
+  
+  // 1. CHANGEMENT : On accepte un Widget (comme IconButton), pas juste une IconData
+  final Widget? suffixIcon; 
+  
   final bool obscureText;
   final TextEditingController? controller;
   final String? Function(String?)? validator;
   final TextInputType keyboardType;
-  final VoidCallback? onSuffixIconTap;
   final bool readOnly;
   final VoidCallback? onTap;
+
+  // On a supprimé 'onSuffixIconTap' car c'est le widget suffixIcon qui gère son propre clic
 
   const CustomTextField({
     super.key,
@@ -22,7 +26,6 @@ class CustomTextField extends StatelessWidget {
     this.controller,
     this.validator,
     this.keyboardType = TextInputType.text,
-    this.onSuffixIconTap,
     this.readOnly = false,
     this.onTap,
   });
@@ -36,7 +39,7 @@ class CustomTextField extends StatelessWidget {
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.2),
+            color: Colors.grey.withOpacity(0.2), // Petite correction syntaxe
             spreadRadius: 2,
             blurRadius: 8,
             offset: const Offset(0, 4),
@@ -54,15 +57,15 @@ class CustomTextField extends StatelessWidget {
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: const TextStyle(color: AppColors.textMuted),
+          
+          // Gère l'icône de gauche (reste une IconData classique)
           prefixIcon: prefixIcon != null 
               ? Icon(prefixIcon, color: AppColors.primary) 
               : null,
-          suffixIcon: suffixIcon != null
-              ? GestureDetector(
-                  onTap: onSuffixIconTap,
-                  child: Icon(suffixIcon, color: AppColors.textMuted),
-                )
-              : null,
+          
+          // 2. CHANGEMENT : On affiche directement le widget (le bouton oeil)
+          suffixIcon: suffixIcon, 
+          
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           enabledBorder: OutlineInputBorder(
@@ -76,6 +79,10 @@ class CustomTextField extends StatelessWidget {
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
             borderSide: const BorderSide(color: Colors.red, width: 1),
+          ),
+          focusedErrorBorder: OutlineInputBorder( // Ajout pour garder le style si erreur et focus
+            borderRadius: BorderRadius.circular(15),
+            borderSide: const BorderSide(color: Colors.red, width: 1.5),
           ),
         ),
       ),

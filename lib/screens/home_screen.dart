@@ -156,6 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
             slivers: [
               // === APP BAR ===
               SliverAppBar(
+                toolbarHeight: 70,
                 floating: true,
                 backgroundColor: Colors.white,
                 elevation: 2,
@@ -164,8 +165,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Image.asset(
                       'assets/images/logo.png',
-                      height: 40, 
-                      width: 40,
+                      height: 60, 
+                      width: 60,
                       fit: BoxFit.contain,
                       errorBuilder: (c, o, s) => const Icon(Icons.broken_image, color: Colors.grey),
                     ),
