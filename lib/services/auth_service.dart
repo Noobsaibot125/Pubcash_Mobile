@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http_parser/http_parser.dart'; // Nécessaire pour MediaType
@@ -29,9 +30,9 @@ class AuthService with ChangeNotifier {
   bool _isLoading = false;
   String? _token;
   bool _requiresProfileCompletion = false;
-  
+
   // Verrou pour éviter les boucles de rafraîchissement infinies
-  bool _isRefreshing = false; 
+  bool _isRefreshing = false;
 
   // Gestion de l'affichage du solde
   bool _showBalance = true;
@@ -57,10 +58,26 @@ class AuthService with ChangeNotifier {
   // =========================================================
   // 1. INITIALISATION ET VÉRIFICATION
   // =========================================================
-  
+
   Future<void> init() async {
     try {
       final accessToken = await _secureStorage.read(key: 'access_token');
+
+      // TENTATIVE DE CHARGEMENT DU PROFIL EN CACHE (Optimistic UI)
+      final cachedProfile = await _secureStorage.read(
+        key: 'cached_user_profile',
+      );
+      if (cachedProfile != null) {
+        try {
+          _currentUser = User.fromJson(jsonDecode(cachedProfile));
+          _checkIfProfileIsComplete();
+          print("✅ Profil chargé depuis le cache");
+          notifyListeners();
+        } catch (e) {
+          print("⚠️ Erreur lecture cache profil: $e");
+        }
+      }
+
       if (accessToken != null && accessToken.isNotEmpty) {
         _token = accessToken;
         // On tente de récupérer les infos fraîches
@@ -103,7 +120,9 @@ class AuthService with ChangeNotifier {
         'code_parrainage': codeParrainage,
       };
       // Nettoyage des valeurs nulles ou vides
-      data.removeWhere((key, value) => value == null || value.toString().isEmpty);
+      data.removeWhere(
+        (key, value) => value == null || value.toString().isEmpty,
+      );
 
       final response = await _apiService.post(
         ApiConstants.register,
@@ -137,7 +156,8 @@ class AuthService with ChangeNotifier {
       _setLoading(true);
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser != null) {
-        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final GoogleSignInAuthentication googleAuth =
+            await googleUser.authentication;
         final response = await _apiService.post(
           ApiConstants.googleAuth,
           data: {'accessToken': googleAuth.accessToken},
@@ -183,6 +203,13 @@ class AuthService with ChangeNotifier {
 
       if (response.statusCode == 200 && response.data != null) {
         _currentUser = User.fromJson(response.data);
+
+        // MISE EN CACHE DU PROFIL
+        await _secureStorage.write(
+          key: 'cached_user_profile',
+          value: jsonEncode(response.data),
+        );
+
         _checkIfProfileIsComplete();
         notifyListeners();
       }
@@ -200,9 +227,9 @@ class AuthService with ChangeNotifier {
       if (isUnauthorized) {
         print("🔐 Token expiré, tentative de renouvellement...");
         _isRefreshing = true;
-        
+
         bool refreshed = await tryRefreshToken();
-        
+
         _isRefreshing = false;
 
         if (refreshed) {
@@ -242,7 +269,7 @@ class AuthService with ChangeNotifier {
       }
 
       await _apiService.put(ApiConstants.updateProfile, data: data);
-      
+
       // Mise à jour réussie, on rafraîchit les données locales
       await refreshUserProfile();
     } catch (e) {
@@ -317,7 +344,7 @@ class AuthService with ChangeNotifier {
 
   void _checkIfProfileIsComplete() {
     if (_currentUser == null) return;
-    
+
     // Seuls les utilisateurs sociaux peuvent avoir un profil incomplet
     if (!_currentUser!.isSocialUser) {
       _requiresProfileCompletion = false;
@@ -326,7 +353,8 @@ class AuthService with ChangeNotifier {
 
     bool missingData =
         (_currentUser!.commune == null || _currentUser!.commune!.isEmpty) ||
-        (_currentUser!.dateNaissance == null || _currentUser!.dateNaissance!.isEmpty) ||
+        (_currentUser!.dateNaissance == null ||
+            _currentUser!.dateNaissance!.isEmpty) ||
         (_currentUser!.contact == null || _currentUser!.contact!.isEmpty);
 
     _requiresProfileCompletion = missingData;
@@ -343,7 +371,7 @@ class AuthService with ChangeNotifier {
 
       // On utilise une instance Dio brute pour éviter les intercepteurs
       final dio = Dio();
-      
+
       // Configuration des headers (Important pour Node.js/Express)
       dio.options.headers['Content-Type'] = 'application/json';
       dio.options.headers['Accept'] = 'application/json';
@@ -358,11 +386,17 @@ class AuthService with ChangeNotifier {
         final newRefreshToken = response.data['refreshToken'];
 
         if (newAccessToken != null) {
-          await _secureStorage.write(key: 'access_token', value: newAccessToken);
+          await _secureStorage.write(
+            key: 'access_token',
+            value: newAccessToken,
+          );
           _token = newAccessToken;
 
           if (newRefreshToken != null) {
-            await _secureStorage.write(key: 'refresh_token', value: newRefreshToken);
+            await _secureStorage.write(
+              key: 'refresh_token',
+              value: newRefreshToken,
+            );
           }
           print("✅ Token rafraîchi avec succès !");
           return true;
@@ -385,6 +419,7 @@ class AuthService with ChangeNotifier {
       // Nettoyage complet
       await _secureStorage.delete(key: 'access_token');
       await _secureStorage.delete(key: 'refresh_token');
+      await _secureStorage.delete(key: 'cached_user_profile');
       _currentUser = null;
       _token = null;
       _requiresProfileCompletion = false;
@@ -429,7 +464,11 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  Future<void> resetPassword(String email, String code, String newPassword) async {
+  Future<void> resetPassword(
+    String email,
+    String code,
+    String newPassword,
+  ) async {
     try {
       _setLoading(true);
       final cleanCode = code.replaceAll(' ', '');

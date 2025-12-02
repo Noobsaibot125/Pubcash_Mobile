@@ -1,10 +1,14 @@
+import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/promotion.dart';
 import 'api_service.dart';
 import 'package:dio/dio.dart'; // Assure-toi d'avoir dio
 import '../utils/api_constants.dart'; // N'oublie pas d'importer tes constantes
 import '../utils/device_utils.dart';
+
 class PromotionService {
   final ApiService _apiService = ApiService();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   Future<List<Promotion>> getPromotions({String filter = 'toutes'}) async {
     try {
@@ -15,9 +19,27 @@ class PromotionService {
       );
 
       final List<dynamic> data = response.data;
+
+      // CACHE: Sauvegarde des données
+      await _secureStorage.write(
+        key: 'cached_promotions_$filter',
+        value: jsonEncode(data),
+      );
+
       return data.map((json) => Promotion.fromJson(json)).toList();
     } catch (e) {
       print('Erreur fetching promotions: $e');
+
+      // CACHE: Tentative de récupération en cas d'erreur
+      final cachedData = await _secureStorage.read(
+        key: 'cached_promotions_$filter',
+      );
+      if (cachedData != null) {
+        final List<dynamic> data = jsonDecode(cachedData);
+        print("⚠️ Chargement promotions depuis le cache ($filter)");
+        return data.map((json) => Promotion.fromJson(json)).toList();
+      }
+
       rethrow;
     }
   }
@@ -27,9 +49,24 @@ class PromotionService {
     try {
       // Utilise la constante définie dans ApiConstants (/promotions/utilisateur/gains)
       final response = await _apiService.get(ApiConstants.userEarnings);
+
+      // CACHE: Sauvegarde
+      await _secureStorage.write(
+        key: 'cached_user_earnings',
+        value: jsonEncode(response.data),
+      );
+
       return response.data;
     } catch (e) {
       print('Erreur fetching earnings: $e');
+
+      // CACHE: Récupération
+      final cachedData = await _secureStorage.read(key: 'cached_user_earnings');
+      if (cachedData != null) {
+        print("⚠️ Chargement earnings depuis le cache");
+        return jsonDecode(cachedData);
+      }
+
       return {'total': 0, 'per_pack': []};
     }
   }
@@ -104,32 +141,31 @@ class PromotionService {
       rethrow;
     }
   }
- Future<void> markPromotionAsViewed(int promoId) async {
+
+  Future<void> markPromotionAsViewed(int promoId) async {
     try {
       String? deviceId = await DeviceUtils.getDeviceId();
 
       await _apiService.post(
         '${ApiConstants.promotions}/$promoId/view',
-        data: {
-          'device_id': deviceId,
-        },
+        data: {'device_id': deviceId},
       );
       print("Vue validée avec succès pour l'appareil: $deviceId");
-      
     } catch (e) {
       print("Erreur validation vue: $e");
-      
+
       // --- MODIFICATION ICI ---
       if (e is DioException) {
         if (e.response?.statusCode == 403) {
-           // On lance une erreur spécifique pour la fraude
-           throw "DEVICE_FRAUD"; 
+          // On lance une erreur spécifique pour la fraude
+          throw "DEVICE_FRAUD";
         }
       }
-      rethrow; 
+      rethrow;
     }
   }
-   // === NOUVEAU : ANNULER PROMOTION (Masquer) ===
+
+  // === NOUVEAU : ANNULER PROMOTION (Masquer) ===
   Future<void> cancelPromotion(int promoId) async {
     try {
       await _apiService.post('${ApiConstants.promotions}/$promoId/cancel');
