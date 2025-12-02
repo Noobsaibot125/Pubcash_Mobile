@@ -279,15 +279,21 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
 
   @override
   void dispose() {
-    // Réaffiche la barre de statut système
-    SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.manual, 
-      overlays: SystemUiOverlay.values 
-    );
-    
+    // 1. Restaurer le mode EdgeToEdge (comme dans ton main.dart)
+    // Au lieu de SystemUiMode.manual qui est l'ancien mode
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+    // 2. Restaurer le style des barres
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-        systemNavigationBarColor: Colors.white,
-        systemNavigationBarIconBrightness: Brightness.dark,
+      // Barre du haut
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark, // Icones noires en haut
+      
+      // Barre du bas (Android)
+      systemNavigationBarColor: Colors.white, // Fond blanc
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark, // Icones noires en bas
+      systemNavigationBarContrastEnforced: false,
     ));
 
     _controller.dispose();

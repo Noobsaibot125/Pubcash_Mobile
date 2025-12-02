@@ -173,14 +173,17 @@ void dispose() {
     );
   }
 
- String? _getProfileImageUrl(String? photoUrl) {
+String? _getProfileImageUrl(String? photoUrl) {
     if (photoUrl == null || photoUrl.isEmpty) return null;
+    // Si le backend fait bien son travail, photoUrl est déjà complet (http...)
+    // Mais par sécurité, on garde une petite vérif
     if (photoUrl.startsWith('http')) {
       return photoUrl;
     }
+    // Fallback au cas où le backend renverrait encore un nom de fichier brut
     const String baseUrl = "http://192.168.1.15:5000"; 
     return "$baseUrl/uploads/profile/$photoUrl";
-  }
+}
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);

@@ -74,13 +74,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     String? displayPhotoUrl;
     if (user.photoUrl != null && user.photoUrl!.isNotEmpty) {
-      if (user.photoUrl!.startsWith('http')) {
-         final separator = user.photoUrl!.contains('?') ? '&' : '?';
-         displayPhotoUrl = "${user.photoUrl}$separator v=$_imageVersion";
-      } else {
-         const String baseUrl = "http://192.168.1.15:5000"; 
-         displayPhotoUrl = "$baseUrl/uploads/profile/${user.photoUrl}?v=$_imageVersion";
-      }
+       final separator = user.photoUrl!.contains('?') ? '&' : '?';
+       displayPhotoUrl = "${user.photoUrl}$separator v=$_imageVersion";
     }
 
     return Scaffold(

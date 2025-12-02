@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Nécessaire pour SystemUiOverlayStyle
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/colors.dart';
 
@@ -6,10 +7,39 @@ class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.light(
+      
+      // Force la clarté générale (aide Android à choisir les bonnes couleurs d'icônes)
+      brightness: Brightness.light, 
+      
+      colorScheme: const ColorScheme.light( // Ajout de const pour optimiser
         primary: AppColors.primary,
         secondary: AppColors.secondary,
         surface: Colors.white,
+        // On s'assure que le fond est bien blanc
+        background: Colors.white, 
+      ),
+      
+      // Couleur de fond générale des Scaffolds
+      scaffoldBackgroundColor: Colors.white,
+
+      // --- AJOUT IMPORTANT : GESTION DE LA BARRE DU HAUT ---
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: IconThemeData(color: Colors.black), // Flèche retour noire
+        actionsIconTheme: IconThemeData(color: Colors.black), // Icônes d'actions noires
+        titleTextStyle: TextStyle(
+          color: Colors.black, 
+          fontSize: 20, 
+          fontWeight: FontWeight.bold
+        ),
+        // Force les icônes de la barre de statut (batterie, heure) en NOIR
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark, // Pour Android
+          statusBarBrightness: Brightness.light,    // Pour iOS
+        ),
       ),
 
       // Typographie avec Google Fonts
@@ -66,7 +96,8 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           elevation: 4,
-          shadowColor: AppColors.primary.withValues(alpha: 0.4),
+          // CORRECTION: withOpacity au lieu de withValues pour compatibilité
+          shadowColor: AppColors.primary.withOpacity(0.4), 
         ),
       ),
 
@@ -74,7 +105,9 @@ class AppTheme {
       cardTheme: CardThemeData(
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        shadowColor: Colors.black.withValues(alpha: 0.1),
+        // CORRECTION: withOpacity ici aussi
+        shadowColor: Colors.black.withOpacity(0.1),
+        color: Colors.white, // S'assurer que les cartes sont blanches
       ),
     );
   }
