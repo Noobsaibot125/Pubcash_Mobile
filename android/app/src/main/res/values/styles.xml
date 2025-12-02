@@ -14,7 +14,10 @@
         <item name="android:windowBackground">?android:colorBackground</item>
         <!-- Définit explicitement les barres comme transparentes au niveau natif -->
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- On met la barre de navigation en BLANC pour correspondre à la demande -->
+        <item name="android:navigationBarColor">@android:color/white</item>
+        <!-- Important pour avoir les icônes foncées sur fond blanc (API 27+) -->
+        <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 </resources>

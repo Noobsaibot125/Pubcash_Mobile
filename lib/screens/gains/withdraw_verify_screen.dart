@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+// Note: Vous devrez peut-être ajouter l'import de Dio si votre PromotionService le renvoie
+// import 'package:dio/dio.dart';
 import '../../services/promotion_service.dart';
-import 'package:provider/provider.dart'; // Si besoin pour AuthService
-import '../../services/auth_service.dart'; // Si besoin pour rafraichir le solde
+import 'package:provider/provider.dart'; 
+import '../../services/auth_service.dart'; 
 
 class WithdrawVerifyScreen extends StatefulWidget {
   final int amount;
@@ -25,6 +27,33 @@ class _WithdrawVerifyScreenState extends State<WithdrawVerifyScreen> {
   final PromotionService _promotionService = PromotionService();
   bool _isLoading = false;
 
+  // ------------------------------------------------------------------
+  // 💡 FONCTION D'EXTRACTION D'ERREUR PERSONNALISÉE (CLÉ DE LA SOLUTION)
+  // ------------------------------------------------------------------
+  String _getUserFriendlyErrorMessage(dynamic error) {
+    // Assumer que 'error' est un objet qui peut avoir une propriété 'response' (comme DioError)
+    // Si vous utilisez Dio, vous pourriez avoir besoin de vérifier 'if (error is DioError)'
+    
+    if (error.response != null && error.response.data != null) {
+      final response = error.response;
+      final responseData = response.data;
+      
+      // Tente de lire le message professionnel renvoyé par le backend Node.js
+      if (responseData is Map && responseData.containsKey('message')) {
+        // Retourne le message configuré (ex: "Service momentanément indisponible")
+        return responseData['message'] ?? "Erreur de validation (vérifiez les détails)";
+      }
+      
+      // Fallback pour les erreurs serveurs (500) non interceptées
+      if (response.statusCode >= 500) {
+        return "Erreur critique du serveur. Veuillez contacter l'administrateur.";
+      }
+    }
+    
+    // Erreur de connexion ou autre exception non HTTP
+    return "Connexion au serveur échouée ou problème réseau. Veuillez réessayer.";
+  }
+  
   Future<void> _processWithdraw() async {
     setState(() => _isLoading = true);
 
@@ -36,7 +65,7 @@ class _WithdrawVerifyScreenState extends State<WithdrawVerifyScreen> {
       );
 
       if (mounted) {
-        // Succès ! On peut rafraichir le solde utilisateur
+        // Succès !
         await Provider.of<AuthService>(context, listen: false).refreshUserProfile();
 
         // Afficher dialog de succès
@@ -67,8 +96,22 @@ class _WithdrawVerifyScreenState extends State<WithdrawVerifyScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur: ${e.toString().replaceAll('Exception:', '')}"), backgroundColor: Colors.red)
+        // Appel de la fonction d'extraction pour obtenir un message clair
+        final userMessage = _getUserFriendlyErrorMessage(e); 
+
+        // Affichage de l'erreur dans un AlertDialog plus professionnel
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text("Échec du Retrait", style: TextStyle(color: Colors.red)),
+            content: Text(userMessage), // Affiche le message clair extrait
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text("Fermer"),
+              )
+            ],
+          ),
         );
       }
     } finally {

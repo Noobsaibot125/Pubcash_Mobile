@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; 
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'services/auth_service.dart';
@@ -19,20 +19,25 @@ void main() async {
   // On garde le edgeToEdge pour un rendu moderne
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    // 👇 CORRECTION : On met BLANC ici pour prolonger ta barre de menu
-    systemNavigationBarColor: Colors.white, 
-    
-    // Pas de ligne de séparation
-    systemNavigationBarDividerColor: Colors.transparent, 
-    
-    // Icônes foncées (gris sombre) pour être visibles sur le blanc
-    systemNavigationBarIconBrightness: Brightness.dark, 
-    
-    // Barre du haut transparente
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      // 👇 CORRECTION : On met BLANC ici pour prolonger ta barre de menu
+      systemNavigationBarColor: Colors.white,
+
+      // Pas de ligne de séparation
+      systemNavigationBarDividerColor: Colors.transparent,
+
+      // Icônes foncées (gris sombre) pour être visibles sur le blanc
+      systemNavigationBarIconBrightness: Brightness.dark,
+
+      // Barre du haut transparente
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+
+      // Désactive le "scrim" (voile sombre) que Android met parfois par défaut
+      systemNavigationBarContrastEnforced: false,
+    ),
+  );
 
   try {
     await Firebase.initializeApp();
@@ -41,12 +46,11 @@ void main() async {
     print("❌ Erreur Firebase: $e");
   }
 
-  await NotificationService().initialiser(); 
+  await NotificationService().initialiser();
 
   runApp(const MyApp());
 }
 
-// ... Le reste de la classe MyApp et AuthWrapper ne change pas
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
