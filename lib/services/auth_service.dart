@@ -1,11 +1,11 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http_parser/http_parser.dart';
+import 'package:http_parser/http_parser.dart'; // Nécessaire pour MediaType
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
-import 'api_service.dart';
 import 'package:dio/dio.dart';
-import 'dart:io';
+import 'api_service.dart';
 import '../models/user.dart';
 import '../utils/api_constants.dart';
 import 'notification_service.dart';
@@ -15,7 +15,7 @@ class AuthService with ChangeNotifier {
   final ApiService _apiService = ApiService();
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
-  // Ton Web Client ID
+  // Ton Web Client ID Google
   static const String _webClientId =
       "405007653561-9lbqs19rj6ib7kvch1nq841m6o4tiehs.apps.googleusercontent.com";
 
@@ -24,33 +24,60 @@ class AuthService with ChangeNotifier {
     scopes: ['email', 'profile'],
   );
 
+  // --- VARIABLES D'ÉTAT ---
   User? _currentUser;
   bool _isLoading = false;
   String? _token;
   bool _requiresProfileCompletion = false;
+  
+  // Verrou pour éviter les boucles de rafraîchissement infinies
+  bool _isRefreshing = false; 
 
+  // Gestion de l'affichage du solde
+  bool _showBalance = true;
+
+  // --- GETTERS ---
   User? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _token != null;
   bool get requiresProfileCompletion => _requiresProfileCompletion;
+  bool get showBalance => _showBalance;
 
-  // === INITIALISATION ===
+  // --- ACTIONS UI ---
+  void toggleBalance() {
+    _showBalance = !_showBalance;
+    notifyListeners();
+  }
+
+  void _setLoading(bool value) {
+    _isLoading = value;
+    notifyListeners();
+  }
+
+  // =========================================================
+  // 1. INITIALISATION ET VÉRIFICATION
+  // =========================================================
+  
   Future<void> init() async {
     try {
       final accessToken = await _secureStorage.read(key: 'access_token');
       if (accessToken != null && accessToken.isNotEmpty) {
         _token = accessToken;
+        // On tente de récupérer les infos fraîches
         await refreshUserProfile();
       }
     } catch (e) {
-      print("Erreur init auth: $e");
-      await logout();
+      print("⚠️ Erreur init auth: $e");
+      // On ne déconnecte pas ici, peut-être juste une erreur réseau
     } finally {
       notifyListeners();
     }
   }
 
-  // --- 1. INSCRIPTION ---
+  // =========================================================
+  // 2. AUTHENTIFICATION (LOGIN / REGISTER)
+  // =========================================================
+
   Future<bool> register({
     required String nomUtilisateur,
     required String email,
@@ -75,9 +102,8 @@ class AuthService with ChangeNotifier {
         'genre': genre,
         'code_parrainage': codeParrainage,
       };
-      data.removeWhere(
-        (key, value) => value == null || value.toString().isEmpty,
-      );
+      // Nettoyage des valeurs nulles ou vides
+      data.removeWhere((key, value) => value == null || value.toString().isEmpty);
 
       final response = await _apiService.post(
         ApiConstants.register,
@@ -91,130 +117,6 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  // --- 2. MISE A JOUR PROFIL ---
-  Future<void> updateUserProfile({
-    required String nom,
-    required String prenom,
-    required String nomUtilisateur,
-    required String contact,
-    required String currentPassword,
-    String? newPassword,
-  }) async {
-    try {
-      _setLoading(true);
-      final data = {
-        'nom': nom,
-        'prenom': prenom,
-        'nom_utilisateur': nomUtilisateur,
-        'contact': contact,
-        'currentPassword': currentPassword,
-        'newPassword': newPassword,
-      };
-      if (newPassword == null || newPassword.isEmpty)
-        data.remove('newPassword');
-
-      await _apiService.put(ApiConstants.updateProfile, data: data);
-      await refreshUserProfile();
-    } catch (e) {
-      rethrow;
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  // --- 2.1 UPLOAD IMAGE PROFIL ---
-  Future<void> uploadProfileImage(File imageFile) async { // Utilise File au lieu de dynamic
-    try {
-      _setLoading(true);
-
-      String fileName = imageFile.path.split('/').last;
-      
-      // Déterminer l'extension pour aider le backend
-      // Si c'est un png, on dit 'image/png', sinon 'image/jpeg' par défaut
-      String subType = fileName.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
-
-      FormData formData = FormData.fromMap({
-        // "file" est bien la clé attendue par ton backend (multer.single('file'))
-        "file": await MultipartFile.fromFile(
-          imageFile.path,
-          filename: fileName,
-          // IMPORTANT : On force le type MIME pour passer le filtre du backend
-          contentType: MediaType('image', subType), 
-        ),
-      });
-
-      // On envoie la requête
-      await _apiService.post(ApiConstants.uploadProfileImage, data: formData);
-      
-      // On rafraîchit le profil immédiatement
-      await refreshUserProfile(); 
-      
-    } catch (e) {
-      print("Erreur upload image: $e"); // Log pour le debug
-      rethrow;
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  // --- 3. REFRESH PROFILE ---
-  Future<void> refreshUserProfile() async {
-    if (_token == null) return;
-
-    try {
-      final response = await _apiService.get(ApiConstants.userProfile);
-
-      if (response.statusCode == 200 && response.data != null) {
-        _currentUser = User.fromJson(response.data);
-
-        // VÉRIFICATION OBLIGATOIRE ICI
-        _checkIfProfileIsComplete();
-
-        notifyListeners();
-      }
-    } catch (e) {
-      print("⚠️ Erreur refresh profil: $e");
-      if (e.toString().contains('401')) {
-        print("🔐 Token expiré, déconnexion...");
-        await logout();
-      }
-    }
-  }
-
-  // --- LOGIQUE INTERNE DE VÉRIFICATION ---
-  void _checkIfProfileIsComplete() {
-    if (_currentUser == null) return;
-
-    // CORRECTION : On ne vérifie QUE si c'est un utilisateur social
-    // Les utilisateurs classiques ont déjà rempli ces infos à l'inscription
-    if (!_currentUser!.isSocialUser) {
-      _requiresProfileCompletion = false;
-      return;
-    }
-
-    // DEBUG : Voir ce que Flutter reçoit vraiment
-    print("🔍 CHECK PROFILE DATA:");
-    print(" - Commune: '${_currentUser!.commune}'");
-    print(" - Date: '${_currentUser!.dateNaissance}'");
-    print(" - Contact: '${_currentUser!.contact}'");
-
-    // On vérifie si les champs critiques sont vides
-    bool missingData =
-        (_currentUser!.commune == null || _currentUser!.commune!.isEmpty) ||
-        (_currentUser!.dateNaissance == null ||
-            _currentUser!.dateNaissance!.isEmpty) ||
-        (_currentUser!.contact == null || _currentUser!.contact!.isEmpty);
-
-    if (missingData) {
-      print("⚠️ PROFIL CONSIDÉRÉ COMME INCOMPLET");
-      _requiresProfileCompletion = true;
-    } else {
-      print("✅ PROFIL COMPLET");
-      _requiresProfileCompletion = false;
-    }
-  }
-
-  // --- 4. LOGIN ---
   Future<void> login(String email, String password) async {
     try {
       _setLoading(true);
@@ -230,14 +132,12 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  // --- 5. SOCIAL LOGIN ---
   Future<void> loginWithGoogle() async {
     try {
       _setLoading(true);
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser != null) {
-        final GoogleSignInAuthentication googleAuth =
-            await googleUser.authentication;
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
         final response = await _apiService.post(
           ApiConstants.googleAuth,
           data: {'accessToken': googleAuth.accessToken},
@@ -270,147 +170,115 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  // --- 6. LOGOUT ---
-  Future<void> logout() async {
+  // =========================================================
+  // 3. GESTION DU PROFIL
+  // =========================================================
+
+  Future<void> refreshUserProfile() async {
+    if (_token == null) return;
+    if (_isRefreshing) return; // Sécurité anti-boucle
+
     try {
-      // 1. Appeler le backend pour invalider le refresh token (Si le token existe encore)
-      if (_token != null) {
-        await _apiService.post('/auth/logout');
+      final response = await _apiService.get(ApiConstants.userProfile);
+
+      if (response.statusCode == 200 && response.data != null) {
+        _currentUser = User.fromJson(response.data);
+        _checkIfProfileIsComplete();
+        notifyListeners();
       }
     } catch (e) {
-      print("Erreur logout backend (non bloquant): $e");
-    } finally {
-      // 2. Nettoyage local
-      await _secureStorage.delete(key: 'access_token');
-      await _secureStorage.delete(key: 'refresh_token');
-      _currentUser = null;
-      _token = null;
-      _requiresProfileCompletion = false;
+      print("⚠️ Erreur refresh profil: $e");
 
-      try {
-        await _googleSignIn.signOut();
-        await FacebookAuth.instance.logOut();
-      } catch (e) {
-        print("Erreur logout social: $e");
+      // DÉTECTION ROBUSTE DU 401 (TOKEN EXPIRÉ)
+      bool isUnauthorized = false;
+      if (e is DioException && e.response?.statusCode == 401) {
+        isUnauthorized = true;
+      } else if (e.toString().contains('401')) {
+        isUnauthorized = true;
       }
 
-      notifyListeners();
+      if (isUnauthorized) {
+        print("🔐 Token expiré, tentative de renouvellement...");
+        _isRefreshing = true;
+        
+        bool refreshed = await tryRefreshToken();
+        
+        _isRefreshing = false;
+
+        if (refreshed) {
+          // Si refresh réussi, on réessaie de charger le profil
+          await refreshUserProfile();
+        } else {
+          // Si refresh échoué, là seulement on déconnecte
+          print("❌ Refresh échoué, déconnexion.");
+          await logout();
+        }
+      }
     }
   }
 
-  // --- MOT DE PASSE OUBLIÉ (NOUVEAU) ---
-
-  // Étape 1 : Envoyer l'email
-  Future<void> forgotPassword(String email) async {
+  // Mise à jour des informations (AVEC CORRECTION 401)
+  Future<void> updateUserProfile({
+    required String nom,
+    required String prenom,
+    required String nomUtilisateur,
+    required String contact,
+    required String currentPassword,
+    String? newPassword,
+  }) async {
     try {
       _setLoading(true);
-      await _apiService.post('/auth/forgot-password', data: {'email': email});
+      final data = {
+        'nom': nom,
+        'prenom': prenom,
+        'nom_utilisateur': nomUtilisateur,
+        'contact': contact,
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      };
+      // On retire le nouveau mot de passe s'il est vide
+      if (newPassword == null || newPassword.isEmpty) {
+        data.remove('newPassword');
+      }
+
+      await _apiService.put(ApiConstants.updateProfile, data: data);
+      
+      // Mise à jour réussie, on rafraîchit les données locales
+      await refreshUserProfile();
     } catch (e) {
+      // IMPORTANT : On laisse l'erreur remonter (rethrow)
+      // C'est l'UI (EditInfoScreen) qui gérera le message "Mot de passe incorrect"
+      // On NE TENTE PAS de refresh token ici car 401 ici = mauvais mot de passe
       rethrow;
     } finally {
       _setLoading(false);
     }
   }
 
-  // Étape 2 : Vérifier le code
-  Future<void> verifyResetCode(String email, String code) async {
+  Future<void> uploadProfileImage(File imageFile) async {
     try {
       _setLoading(true);
-      // Nettoyage du code (espaces) comme en React
-      final cleanCode = code.replaceAll(' ', '');
-      await _apiService.post(
-        '/auth/verify-reset-code',
-        data: {'email': email, 'resetCode': cleanCode},
-      );
+      String fileName = imageFile.path.split('/').last;
+      String subType = fileName.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
+
+      FormData formData = FormData.fromMap({
+        "file": await MultipartFile.fromFile(
+          imageFile.path,
+          filename: fileName,
+          contentType: MediaType('image', subType),
+        ),
+      });
+
+      await _apiService.post(ApiConstants.uploadProfileImage, data: formData);
+      await refreshUserProfile();
     } catch (e) {
+      print("Erreur upload image: $e");
       rethrow;
     } finally {
       _setLoading(false);
     }
   }
 
-  // Étape 3 : Réinitialiser
-  Future<void> resetPassword(
-    String email,
-    String code,
-    String newPassword,
-  ) async {
-    try {
-      _setLoading(true);
-      final cleanCode = code.replaceAll(' ', '');
-      await _apiService.post(
-        '/auth/reset-password',
-        data: {
-          'email': email,
-          'resetCode': cleanCode,
-          'newPassword': newPassword,
-        },
-      );
-    } catch (e) {
-      rethrow;
-    } finally {
-      _setLoading(false);
-    }
-  }
-
-  // --- HELPER POUR LES ERREURS ---
-  // Utilise ceci dans tes UI pour afficher le message du backend
-  static String getErrorMessage(dynamic error) {
-    if (error is DioException && error.response?.data != null) {
-      final data = error.response?.data;
-      if (data is Map && data.containsKey('message')) {
-        return data['message'];
-      }
-    }
-    return error.toString().replaceAll('Exception:', '').trim();
-  }
-
-  void _setLoading(bool value) {
-    _isLoading = value;
-    notifyListeners();
-  }
-
-  // --- 7. TRAITEMENT RÉPONSE AUTH ---
- Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
-    final String accessToken = data['accessToken']?.toString() ?? '';
-    final String refreshToken = data['refreshToken']?.toString() ?? '';
-
-    if (accessToken.isEmpty) throw Exception("Token manquant");
-
-    await _secureStorage.write(key: 'access_token', value: accessToken);
-    await _secureStorage.write(key: 'refresh_token', value: refreshToken);
-    _token = accessToken;
-
-    if (data['user'] != null) {
-      try {
-        _currentUser = User.fromJson(data['user']);
-      } catch (e) {
-        print("❌ Erreur parsing User: $e");
-      }
-    }
-
-    if (data['profileCompleted'] == false) {
-      _requiresProfileCompletion = true;
-    } else {
-      _checkIfProfileIsComplete();
-    }
-
-    notifyListeners();
-
-    // ============================================================
-    // 2. AJOUT CRUCIAL : ON FORCE L'ENVOI DU TOKEN ICI
-    // ============================================================
-    print("🔐 Connexion réussie, initialisation des notifications...");
-    // On ne met pas 'await' pour ne pas bloquer l'UI, ça se fait en background
-    NotificationService().initialiser(); 
-    // ============================================================
-
-    if (_requiresProfileCompletion) {
-      throw IncompleteProfileException();
-    }
-  }
-
-  // --- 8. COMPLETION PROFIL ---
   Future<void> completeProfile({
     required String commune,
     required String dateNaissance,
@@ -437,10 +305,7 @@ class AuthService with ChangeNotifier {
         _token = response.data['token'];
       }
 
-      // Recharger l'utilisateur complet pour confirmer
       await refreshUserProfile();
-
-      // On force le flag à faux pour sortir de l'écran
       _requiresProfileCompletion = false;
       notifyListeners();
     } catch (e) {
@@ -448,5 +313,187 @@ class AuthService with ChangeNotifier {
     } finally {
       _setLoading(false);
     }
+  }
+
+  void _checkIfProfileIsComplete() {
+    if (_currentUser == null) return;
+    
+    // Seuls les utilisateurs sociaux peuvent avoir un profil incomplet
+    if (!_currentUser!.isSocialUser) {
+      _requiresProfileCompletion = false;
+      return;
+    }
+
+    bool missingData =
+        (_currentUser!.commune == null || _currentUser!.commune!.isEmpty) ||
+        (_currentUser!.dateNaissance == null || _currentUser!.dateNaissance!.isEmpty) ||
+        (_currentUser!.contact == null || _currentUser!.contact!.isEmpty);
+
+    _requiresProfileCompletion = missingData;
+  }
+
+  // =========================================================
+  // 4. LOGIQUE TOKEN & LOGOUT
+  // =========================================================
+
+  Future<bool> tryRefreshToken() async {
+    try {
+      final refreshToken = await _secureStorage.read(key: 'refresh_token');
+      if (refreshToken == null) return false;
+
+      // On utilise une instance Dio brute pour éviter les intercepteurs
+      final dio = Dio();
+      
+      // Configuration des headers (Important pour Node.js/Express)
+      dio.options.headers['Content-Type'] = 'application/json';
+      dio.options.headers['Accept'] = 'application/json';
+
+      final response = await dio.post(
+        '${ApiConstants.baseUrl}${ApiConstants.refreshToken}',
+        data: {'token': refreshToken},
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final newAccessToken = response.data['accessToken'];
+        final newRefreshToken = response.data['refreshToken'];
+
+        if (newAccessToken != null) {
+          await _secureStorage.write(key: 'access_token', value: newAccessToken);
+          _token = newAccessToken;
+
+          if (newRefreshToken != null) {
+            await _secureStorage.write(key: 'refresh_token', value: newRefreshToken);
+          }
+          print("✅ Token rafraîchi avec succès !");
+          return true;
+        }
+      }
+    } catch (e) {
+      print("⚠️ Échec du refresh token: $e");
+    }
+    return false;
+  }
+
+  Future<void> logout() async {
+    try {
+      if (_token != null) {
+        await _apiService.post('/auth/logout');
+      }
+    } catch (e) {
+      print("Erreur logout backend: $e");
+    } finally {
+      // Nettoyage complet
+      await _secureStorage.delete(key: 'access_token');
+      await _secureStorage.delete(key: 'refresh_token');
+      _currentUser = null;
+      _token = null;
+      _requiresProfileCompletion = false;
+
+      try {
+        await _googleSignIn.signOut();
+        await FacebookAuth.instance.logOut();
+      } catch (e) {
+        print("Erreur logout social: $e");
+      }
+      notifyListeners();
+    }
+  }
+
+  // =========================================================
+  // 5. MOT DE PASSE OUBLIÉ
+  // =========================================================
+
+  Future<void> forgotPassword(String email) async {
+    try {
+      _setLoading(true);
+      await _apiService.post('/auth/forgot-password', data: {'email': email});
+    } catch (e) {
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> verifyResetCode(String email, String code) async {
+    try {
+      _setLoading(true);
+      final cleanCode = code.replaceAll(' ', '');
+      await _apiService.post(
+        '/auth/verify-reset-code',
+        data: {'email': email, 'resetCode': cleanCode},
+      );
+    } catch (e) {
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> resetPassword(String email, String code, String newPassword) async {
+    try {
+      _setLoading(true);
+      final cleanCode = code.replaceAll(' ', '');
+      await _apiService.post(
+        '/auth/reset-password',
+        data: {
+          'email': email,
+          'resetCode': cleanCode,
+          'newPassword': newPassword,
+        },
+      );
+    } catch (e) {
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  // =========================================================
+  // 6. HELPERS
+  // =========================================================
+
+  Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
+    final String accessToken = data['accessToken']?.toString() ?? '';
+    final String refreshToken = data['refreshToken']?.toString() ?? '';
+
+    if (accessToken.isEmpty) throw Exception("Token manquant");
+
+    await _secureStorage.write(key: 'access_token', value: accessToken);
+    await _secureStorage.write(key: 'refresh_token', value: refreshToken);
+    _token = accessToken;
+
+    if (data['user'] != null) {
+      try {
+        _currentUser = User.fromJson(data['user']);
+      } catch (e) {
+        print("❌ Erreur parsing User: $e");
+      }
+    }
+
+    if (data['profileCompleted'] == false) {
+      _requiresProfileCompletion = true;
+    } else {
+      _checkIfProfileIsComplete();
+    }
+
+    notifyListeners();
+
+    // Initialisation des notifications une fois connecté
+    print("🔔 Initialisation OneSignal...");
+    NotificationService().initialiser();
+
+    if (_requiresProfileCompletion) {
+      throw IncompleteProfileException();
+    }
+  }
+
+  static String getErrorMessage(dynamic error) {
+    if (error is DioException && error.response?.data != null) {
+      final data = error.response?.data;
+      if (data is Map && data.containsKey('message')) {
+        return data['message'];
+      }
+    }
+    return error.toString().replaceAll('Exception:', '').trim();
   }
 }

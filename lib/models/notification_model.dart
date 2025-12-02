@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:convert'; // Nécessaire pour jsonDecode si donnees est une string
+import 'dart:convert';
 
 class AppNotification {
   final int id;
@@ -21,33 +21,35 @@ class AppNotification {
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
-    // 1. GESTION ROBUSTE DE LA DATE
-    // MySQL renvoie souvent "YYYY-MM-DD HH:MM:SS" qui fait planter DateTime.parse
+    // 1. DATE
     DateTime parsedDate = DateTime.now();
     if (json['date_creation'] != null) {
       String dateStr = json['date_creation'].toString();
-      // Si la date contient un espace au lieu du T, on parse manuellement ou on remplace
-      // DateTime.tryParse est plus sûr, il ne fera pas crasher l'app
       parsedDate = DateTime.tryParse(dateStr) ?? 
                    DateTime.tryParse(dateStr.replaceAll(' ', 'T')) ?? 
                    DateTime.now();
     }
 
-    // 2. GESTION ROBUSTE DU BOOLEEN
-    // MySQL renvoie 0 ou 1, pas true/false
+    // 2. BOOLEEN LU
     bool isRead = false;
     if (json['lu'] == 1 || json['lu'] == true || json['lu'] == '1') {
       isRead = true;
     }
 
-    // 3. GESTION ROBUSTE DES DONNEES (JSON)
+    // 3. DONNEES (Parsing Robuste)
     Map<String, dynamic>? parsedData;
     if (json['donnees'] != null) {
       if (json['donnees'] is Map) {
         parsedData = Map<String, dynamic>.from(json['donnees']);
       } else if (json['donnees'] is String && json['donnees'].isNotEmpty) {
         try {
-          parsedData = jsonDecode(json['donnees']);
+          // Parfois le backend envoie du JSON stringifié deux fois, on gère ça
+          var decoded = jsonDecode(json['donnees']);
+          if (decoded is String) {
+             parsedData = jsonDecode(decoded);
+          } else {
+             parsedData = decoded;
+          }
         } catch (e) {
           print("Erreur parsing donnees notification: $e");
           parsedData = {};
@@ -56,7 +58,7 @@ class AppNotification {
     }
 
     return AppNotification(
-      id: json['id'] ?? 0, // Sécurité si null
+      id: json['id'] ?? 0,
       type: json['type'] ?? 'info',
       titre: json['titre'] ?? 'Notification',
       contenu: json['contenu'] ?? '',

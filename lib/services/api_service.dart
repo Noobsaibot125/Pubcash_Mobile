@@ -1,59 +1,69 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../utils/api_constants.dart';
+// Import pour pouvoir rediriger l'utilisateur si besoin (optionnel selon ton architecture)
+import '../main.dart'; 
 
 class ApiService {
-  final Dio _dio;
-  // On crée une instance du stockage pour lire le token
+  // 1. SINGLETON : On s'assure qu'il n'y a qu'une seule instance de ApiService
+  static final ApiService _instance = ApiService._internal();
+  
+  factory ApiService() {
+    return _instance;
+  }
+
+  late final Dio _dio;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
-  ApiService()
-    : _dio = Dio(
-        BaseOptions(
-          baseUrl: ApiConstants.baseUrl,
-          connectTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 30),
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-        ),
-      ) {
-    // AJOUT DES INTERCEPTEURS (C'est ici que la magie opère)
+  // Constructeur privé
+  ApiService._internal() {
+    _dio = Dio(
+      BaseOptions(
+        // Assure-toi que ApiConstants.baseUrl est bien "http://192.168.1.15:5000/api"
+        baseUrl: ApiConstants.baseUrl, 
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+
+    // AJOUT DES INTERCEPTEURS
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          // 1. Avant d'envoyer la requête, on cherche le token dans le téléphone
-          final token = await _secureStorage.read(
-            key: 'access_token',
-          ); // TODO: Use constant for key
+          // Lecture du token
+          // Utilise une constante pour éviter les fautes de frappe !
+          final token = await _secureStorage.read(key: 'access_token'); 
 
-          // 2. Si on trouve un token, on l'ajoute aux headers
           if (token != null && token.isNotEmpty) {
-            options.headers[ApiConstants.authHeader] =
-                '${ApiConstants.bearerPrefix}$token';
-            print('🔑 Token ajouté à la requête: ${options.path}');
-          } else {
-            print('⚠️ Aucun token trouvé pour: ${options.path}');
+            options.headers['Authorization'] = 'Bearer $token';
+            // print('🔑 Token ajouté'); // Décommente pour débugger uniquement
           }
-
-          print('🚀 [${options.method}] ${options.path}');
+          
+          // print('🚀 [${options.method}] ${options.path}');
           return handler.next(options);
         },
+        
         onResponse: (response, handler) {
-          print('✅ [${response.statusCode}] ${response.requestOptions.path}');
+          // print('✅ [${response.statusCode}] ${response.requestOptions.path}');
           return handler.next(response);
         },
-        onError: (DioException e, handler) {
+        
+        onError: (DioException e, handler) async {
           print('❌ [${e.response?.statusCode}] ${e.requestOptions.path}');
 
-          if (e.response?.data != null) {
-            print('📦 Body Erreur: ${e.response?.data}');
-          }
-
+          // GESTION ERREUR 401 (Non autorisé / Token expiré)
           if (e.response?.statusCode == 401) {
-            print('🔐 Erreur 401: Token invalide ou expiré.');
-            // TODO: Implement refresh token logic here
+            print('🔐 Session expirée. Nettoyage du token...');
+            
+            // 1. On supprime le token incorrect
+            await _secureStorage.delete(key: 'access_token');
+            
+            // 2. (Optionnel) Ici tu pourrais forcer la déconnexion et renvoyer vers Login
+            // navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
           }
 
           return handler.next(e);
@@ -62,20 +72,16 @@ class ApiService {
     );
   }
 
-  // GET Request
-  Future<Response> get(
-    String endpoint, {
-    Map<String, dynamic>? queryParameters,
-  }) async {
+  // --- MÉTHODES HTTP ---
+
+  Future<Response> get(String endpoint, {Map<String, dynamic>? queryParameters}) async {
     return await _dio.get(endpoint, queryParameters: queryParameters);
   }
 
-  // POST Request
   Future<Response> post(String endpoint, {dynamic data}) async {
     return await _dio.post(endpoint, data: data);
   }
 
-  // PATCH Request
   Future<Response> patch(String endpoint, {dynamic data}) async {
     return await _dio.patch(endpoint, data: data);
   }
@@ -86,5 +92,10 @@ class ApiService {
 
   Future<Response> delete(String endpoint) async {
     return await _dio.delete(endpoint);
+  }
+  
+  // Utile pour l'upload d'images (Multipart)
+  Future<Response> postFormData(String endpoint, FormData data) async {
+    return await _dio.post(endpoint, data: data);
   }
 }

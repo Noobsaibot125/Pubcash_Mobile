@@ -1,49 +1,56 @@
 class ApiConstants {
-  // Base URL de production (celle qui fonctionne)
+  // ==============================================================================
+  // 🌍 CONFIGURATION PRODUCTION (En Ligne)
+  // ==============================================================================
+  
   static const String baseUrl = 'https://pub-cash.com/api';
-  static const String apiUrl = '$baseUrl';
+  
+  // URL racine pour les images/vidéos (sans le /api à la fin)
+  static const String socketUrl = 'https://pub-cash.com'; 
 
-  // Socket.IO URL (sans /api pour WebSocket)
-  static const String socketUrl = 'https://pub-cash.com';
+  static const String apiUrl = baseUrl;
 
-  // Endpoints Auth
+  // --- Endpoints Auth ---
   static const String login = '/auth/utilisateur/login';
   static const String register = '/auth/utilisateur/register';
   static const String googleAuth = '/auth/google';
   static const String facebookAuth = '/auth/facebook';
   static const String refreshToken = '/auth/refresh-token';
 
-  // Endpoints User
+  // --- Endpoints User ---
   static const String userProfile = '/user/profile';
-  static const String updateProfile = '/user/profile';
+  static const String updateProfile = '/user/profile'; 
   static const String completeProfile = '/auth/utilisateur/complete-profile';
   static const String uploadProfileImage = '/user/upload-profile-image';
 
-  // Endpoints Data
+  // --- Endpoints Data ---
   static const String villes = '/villes';
   static const String communes = '/communes';
 
-  // Endpoints Promotions/Videos
+  // --- Endpoints Promotions/Videos ---
   static const String promotions = '/promotions';
   static const String userEarnings = '/promotions/utilisateur/gains';
-  static const String userVideos = '/promotions/utilisateur/videos';
+  
+  // ✅ CORRECTION : Le chemin correspond à ta route NodeJS :
+  // router.get('/utilisateur/historique-videos', ...)
+  static const String userVideos = '/promotions/utilisateur/historique-videos'; 
 
-  // Endpoints Games
+  // --- Endpoints Games ---
   static const String gamePoints = '/games/points';
   static const String gameWheel = '/games/wheel';
   static const String gameList = '/games/list';
   static const String gamePuzzleStart = '/games/puzzle/start';
   static const String gamePuzzleSubmit = '/games/puzzle/submit';
 
-  // Endpoints Notifications
+  // --- Endpoints Notifications ---
   static const String notifications = '/notifications';
-  static const String notificationsUnreadCount =
-      '/notifications/non-lues/count';
-  static const String notificationsMarkRead = '/notifications/:id/lire';
+  static const String notificationsUnreadCount = '/notifications/non-lues/count';
+  // Note: ":id" sera remplacé dynamiquement dans le code Dart
+  static const String notificationsMarkRead = '/notifications/:id/lire'; 
   static const String notificationsMarkAllRead = '/notifications/lire-toutes';
   static const String notificationsToken = '/notifications/token';
 
-  // Headers
+  // --- Headers ---
   static const String authHeader = 'Authorization';
   static const String bearerPrefix = 'Bearer ';
 }

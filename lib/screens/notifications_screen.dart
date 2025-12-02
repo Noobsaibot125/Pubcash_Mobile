@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/notification_model.dart';
 import '../services/notification_service.dart';
 import '../utils/colors.dart';
-
+import '../utils/api_constants.dart'; // 👈 IMPORT IMPORTANT
+import 'simple_video_player.dart';
+import 'gains/transaction_details_screen.dart';
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({Key? key}) : super(key: key);
 
@@ -17,6 +19,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   int _currentPage = 1;
   bool _hasMore = true;
 
+  // ✅ CORRECTION : On utilise la constante de production définie dans ApiConstants
+  // Cela vaut "https://pub-cash.com"
+  final String _baseUrl = ApiConstants.socketUrl; 
+
   @override
   void initState() {
     super.initState();
@@ -25,14 +31,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _chargerNotifications({bool reload = false}) async {
     if (reload) {
-      setState(() {
+      if(mounted) setState(() {
         _currentPage = 1;
         _notifications = [];
         _hasMore = true;
       });
     }
 
-    setState(() => _isLoading = true);
+    if(mounted) setState(() => _isLoading = true);
 
     try {
       final nouvelles = await _notificationService.recupererNotifications(
@@ -61,157 +67,163 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final diff = DateTime.now().difference(date);
     if (diff.inDays > 0) return "Il y a ${diff.inDays}j";
     if (diff.inHours > 0) return "Il y a ${diff.inHours}h";
-    if (diff.inMinutes > 0) return "Il y a ${diff.inMinutes} min";
+    if (diff.inMinutes > 0) return "Il y a ${diff.inMinutes}min";
     return "À l'instant";
   }
 
-  Future<void> _marquerCommeLue(AppNotification notif) async {
+  // --- GESTION DU CLIC ---
+  // --- GESTION DU CLIC ---
+  Future<void> _handleNotificationClick(AppNotification notif) async {
     if (!notif.lu) {
-      await _notificationService.marquerCommeLue(notif.id);
-      await _chargerNotifications(reload: true);
+       _notificationService.marquerCommeLue(notif.id); 
+       setState(() {}); 
     }
+
+    print("Clic Notification Type: ${notif.type}");
+
+    // 1. CAS RETRAIT (Nouveau) -> TransactionDetailsScreen
+    if (notif.type.contains('retrait')) {
+      
+      // On prépare les données pour l'écran de détails
+      // On essaie de récupérer le statut depuis les données, sinon on le déduit du type
+      String statut = notif.donnees?['statut'] ?? 'en_cours';
+      if (notif.type == 'retrait_complete') statut = 'succes';
+      if (notif.type == 'retrait_echec') statut = 'echec';
+
+      final Map<String, dynamic> transactionData = {
+        'montant': notif.donnees?['montant'] ?? '0',
+        'statut': statut,
+        'date': notif.dateCreation.toIso8601String(), // On utilise la date de la notif
+        'operator': notif.donnees?['operator'] ?? notif.donnees?['operateur'] ?? 'Mobile',
+        'transaction_id': notif.donnees?['transaction_id'] ?? 'N/A',
+        'numero_telephone': notif.donnees?['numero_telephone'] ?? 'Non spécifié',
+      };
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TransactionDetailsScreen(transaction: transactionData),
+        ),
+      );
+      return; 
+    }
+
+    // 2. CAS NOUVELLE VIDÉO -> Accueil
+    if (notif.type == 'nouvelle_video' || notif.type == 'nouvelle_promo') {
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+      return;
+    }
+
+    // 3. CAS VIDÉO REGARDÉE -> Player
+    if (notif.type == 'video_regardee' || notif.type == 'felicitations') {
+      String? videoUrl = notif.donnees?['url_video'];
+      String titre = notif.donnees?['titre'] ?? 'Gain validé';
+
+      if (videoUrl != null && videoUrl.isNotEmpty) {
+        
+        if (!videoUrl.startsWith('http')) {
+           if (videoUrl.startsWith('/')) videoUrl = videoUrl.substring(1);
+           videoUrl = "$_baseUrl/$videoUrl";
+        }
+
+        print("Lecture vidéo prod : $videoUrl");
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SimpleVideoPlayer(
+              videoUrl: videoUrl!,
+              title: titre,
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Vidéo indisponible ou lien expiré.")),
+        );
+      }
+    }
+  }
+
+  String _getValidImageUrl(String path, String folder) {
+    if (path.isEmpty) return "";
+    if (path.startsWith('http')) return path;
+    if (path.startsWith('/')) path = path.substring(1);
+    return "$_baseUrl/uploads/$folder/$path";
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9FF),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          "Notifications",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
+        title: const Text("Notifications", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 20)),
+        centerTitle: false,
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          if (_notifications.any((n) => !n.lu))
-            IconButton(
+           Padding(
+             padding: const EdgeInsets.only(right: 16.0),
+             child: IconButton(
               icon: const Icon(Icons.done_all, color: AppColors.primary),
-              tooltip: 'Tout marquer comme lu',
               onPressed: () async {
                 await _notificationService.marquerToutesCommeLues();
-                await _chargerNotifications(reload: true);
+                _chargerNotifications(reload: true);
               },
             ),
+           )
         ],
       ),
       body: RefreshIndicator(
         onRefresh: () => _chargerNotifications(reload: true),
         color: AppColors.primary,
-        child: _isLoading && _notifications.isEmpty
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
-              )
-            : _notifications.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.notifications_none,
-                      size: 80,
-                      color: Colors.grey[300],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      "Aucune notification",
-                      style: TextStyle(color: Colors.grey[500], fontSize: 18),
-                    ),
-                  ],
-                ),
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
+        child: _notifications.isEmpty && !_isLoading
+            ? Center(child: Text("Aucune notification", style: TextStyle(color: Colors.grey[500])))
+            : ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 itemCount: _notifications.length + (_hasMore ? 1 : 0),
+                separatorBuilder: (context, index) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   if (index == _notifications.length) {
-                    // Bouton charger plus
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Center(
-                        child: _isLoading
-                            ? const CircularProgressIndicator(
-                                color: AppColors.primary,
-                              )
-                            : TextButton(
-                                onPressed: () {
-                                  _currentPage++;
-                                  _chargerNotifications();
-                                },
-                                child: const Text('Charger plus'),
-                              ),
-                      ),
-                    );
+                    return _isLoading
+                        ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                        : TextButton(onPressed: () { _currentPage++; _chargerNotifications(); }, child: const Text("Voir plus"));
                   }
-
-                  final notif = _notifications[index];
-                  return _buildNotificationItem(notif);
+                  return _buildNotificationCard(_notifications[index]);
                 },
               ),
       ),
     );
   }
 
-  Widget _buildNotificationItem(AppNotification notif) {
+  Widget _buildNotificationCard(AppNotification notif) {
+    bool hasThumbnail = (notif.type == 'video_regardee' || 
+                         notif.type == 'nouvelle_video' || 
+                         notif.type == 'felicitations') &&
+                         notif.donnees != null && 
+                         notif.donnees!['thumbnail_url'] != null;
+
     return GestureDetector(
-      onTap: () => _marquerCommeLue(notif),
+      onTap: () => _handleNotificationClick(notif),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: notif.lu ? Colors.white : const Color(0xFFF0F7FF),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: notif.lu
-                ? Colors.grey.shade200
-                : AppColors.primary.withOpacity(0.2),
-            width: 1,
-          ),
+          color: notif.lu ? Colors.white : const Color(0xFFFFFDF5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade100),
           boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
+            BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2)),
           ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Icône avec badge "non lu"
-            Stack(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: notif.couleur.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(notif.icone, color: notif.couleur, size: 24),
-                ),
-                if (!notif.lu)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+            _buildLeadingIcon(notif),
             const SizedBox(width: 12),
-
-            // Contenu
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -219,7 +231,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   Text(
                     notif.titre,
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: notif.lu ? FontWeight.w600 : FontWeight.bold,
                       color: Colors.black87,
                     ),
@@ -227,40 +239,112 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   const SizedBox(height: 4),
                   Text(
                     notif.contenu,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 6),
                   Text(
                     _formaterDate(notif.dateCreation),
-                    style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                    style: TextStyle(fontSize: 11, color: Colors.grey[400]),
                   ),
                 ],
               ),
             ),
-
-            // Montant (si applicable)
-            if (notif.montantFormate != null)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: notif.couleur.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  notif.montantFormate!,
-                  style: TextStyle(
-                    color: notif.couleur,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
+            const SizedBox(width: 8),
+            if (hasThumbnail)
+              _buildThumbnail(notif)
+            else if (notif.montantFormate != null)
+              _buildAmountBadge(notif.montantFormate!)
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildLeadingIcon(AppNotification notif) {
+    if (notif.type.contains('retrait') && notif.donnees != null) {
+      var rawOp = notif.donnees!['operator'] ?? 
+                  notif.donnees!['operateur'] ?? 
+                  notif.donnees!['operateur_mobile'];
+      
+      String asset = 'assets/images/logo.png';
+      if (rawOp != null) {
+        String op = rawOp.toString().toLowerCase().trim();
+        if (op.contains('orange')) asset = 'assets/images/Orange.png';
+        else if (op.contains('mtn')) asset = 'assets/images/MTN.png';
+        else if (op.contains('moov')) asset = 'assets/images/Moov.png';
+        else if (op.contains('wave')) asset = 'assets/images/Wave.png';
+      }
+      return _buildAssetIcon(asset);
+    }
+
+    if (notif.type == 'roue_fortune' || notif.type.contains('jeu')) {
+      return Container(
+        width: 48, height: 48,
+        decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFFFF8E1)),
+        padding: const EdgeInsets.all(6),
+        child: Image.asset('assets/images/Wheel.png', fit: BoxFit.contain),
+      );
+    }
+
+    if (notif.type == 'video_regardee' || notif.type == 'felicitations') {
+       return _buildIconContainer(const Icon(Icons.check_circle, color: Colors.green, size: 26), Colors.green.withOpacity(0.1));
+    }
+    if (notif.type == 'nouvelle_video') {
+       return _buildIconContainer(const Icon(Icons.play_circle_fill, color: Colors.orange, size: 26), Colors.orange.withOpacity(0.1));
+    }
+
+    return _buildIconContainer(const Icon(Icons.notifications, color: Colors.grey), Colors.grey.withOpacity(0.1));
+  }
+
+  Widget _buildAssetIcon(String path) {
+    return Container(
+      width: 48, height: 48,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        image: DecorationImage(image: AssetImage(path), fit: BoxFit.cover),
+        border: Border.all(color: Colors.grey.shade200)
+      ),
+    );
+  }
+
+  Widget _buildIconContainer(Widget child, Color bg) {
+    return Container(
+      width: 48, height: 48,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: bg),
+      child: child,
+    );
+  }
+
+  Widget _buildThumbnail(AppNotification notif) {
+    String thumbUrl = notif.donnees!['thumbnail_url'];
+    thumbUrl = _getValidImageUrl(thumbUrl, "thumbnails");
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            width: 80, height: 45, color: Colors.black12,
+            child: Image.network(thumbUrl, fit: BoxFit.cover, errorBuilder: (c, o, s) => const Icon(Icons.broken_image, size: 20, color: Colors.grey)),
+          ),
+        ),
+        Container(
+          width: 20, height: 20,
+          decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), shape: BoxShape.circle),
+          child: const Icon(Icons.play_arrow, size: 14, color: Colors.black),
+        )
+      ],
+    );
+  }
+
+  Widget _buildAmountBadge(String amount) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(4)),
+      child: Text(amount, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
     );
   }
 }

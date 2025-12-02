@@ -4,6 +4,8 @@ import '../../services/auth_service.dart';
 import '../../services/promotion_service.dart';
 import '../../utils/colors.dart';
 import 'package:pubcash_mobile/screens/gains/withdraw_amount_screen.dart';
+import 'simple_video_player.dart'; // 👈 IMPORT DU LECTEUR
+import 'package:pubcash_mobile/screens/gains/transaction_details_screen.dart'; // 👈 IMPORT DE LA NOUVELLE PAGE
 
 class GainsScreen extends StatefulWidget {
   const GainsScreen({super.key});
@@ -15,10 +17,18 @@ class GainsScreen extends StatefulWidget {
 class _GainsScreenState extends State<GainsScreen> {
   final PromotionService _promotionService = PromotionService();
   
-  List<dynamic> _history = [];
-  double _solde = 0.0; // On stocke le solde ici localement
+  List<dynamic> _withdrawHistory = []; 
+  List<dynamic> _videoHistory = [];    
+  List<dynamic> _filteredVideoHistory = []; 
+
+  double _solde = 0.0;
   bool _isLoading = true;
-  bool _isBalanceVisible = true;
+  
+  int _currentTab = 0; 
+  String _gainFilter = 'tous'; 
+
+  // IMPORTANT : Assure-toi que c'est la bonne IP ici aussi
+  final String _baseUrl = "http://192.168.1.15:5000"; 
 
   @override
   void initState() {
@@ -29,17 +39,24 @@ class _GainsScreenState extends State<GainsScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      // 1. On récupère les gains comme sur la Home (C'est la méthode qui marche)
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.refreshUserProfile();
+
       final earningsData = await _promotionService.getEarnings();
+      final withdrawHistory = await _promotionService.getWithdrawHistory();
       
-      // 2. On récupère l'historique
-      final history = await _promotionService.getWithdrawHistory();
+      // On récupère l'historique complet
+      final videoHistoryRaw = await _promotionService.getInteractionHistory();
       
+      // On garde les VUES (gains validés)
+      final videoGains = videoHistoryRaw.where((item) => item['type_interaction'] == 'vue').toList();
+
       if (mounted) {
         setState(() {
-          // Conversion sécurisée du solde
           _solde = double.tryParse(earningsData['total'].toString()) ?? 0.0;
-          _history = history;
+          _withdrawHistory = withdrawHistory;
+          _videoHistory = videoGains;
+          _applyGainFilter(); 
           _isLoading = false;
         });
       }
@@ -49,9 +66,63 @@ class _GainsScreenState extends State<GainsScreen> {
     }
   }
 
+  // --- METHODE POUR JOUER LA VIDEO (Similaire à History) ---
+  void _playVideo(Map<String, dynamic> videoData) {
+    String? videoUrl = videoData['url_video'];
+    String titre = videoData['titre'] ?? 'Vidéo Gain';
+
+    if (videoUrl != null && videoUrl.isNotEmpty) {
+      // Reconstruction de l'URL si relative
+      if (!videoUrl.startsWith('http')) {
+         videoUrl = "$_baseUrl/uploads/videos/$videoUrl";
+      }
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SimpleVideoPlayer(
+            videoUrl: videoUrl!,
+            title: titre,
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Vidéo indisponible (trop ancienne ou supprimée)")),
+      );
+    }
+  }
+
+  void _applyGainFilter() {
+    if (_gainFilter == 'tous') {
+      _filteredVideoHistory = List.from(_videoHistory);
+    } else {
+      _filteredVideoHistory = _videoHistory.where((video) {
+        int packId = video['id_pack'] is int ? video['id_pack'] : int.tryParse(video['id_pack'].toString()) ?? 0;
+        
+        if (_gainFilter == 'argent') return packId == 1; 
+        if (_gainFilter == 'gold') return packId == 2;   
+        if (_gainFilter == 'diamant') return packId == 3;
+        return false;
+      }).toList();
+    }
+  }
+
+  int _getAmountForPack(dynamic packId) {
+    int id = packId is int ? packId : int.tryParse(packId.toString()) ?? 0;
+    switch (id) {
+      case 1: return 50;
+      case 2: return 75;
+      case 3: return 100;
+      default: return 0;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = Provider.of<AuthService>(context).currentUser;
+    final authService = Provider.of<AuthService>(context); 
+    final user = authService.currentUser;
+    
     final String displayName = (user?.prenom != null && user!.prenom!.isNotEmpty) 
         ? "${user.prenom} ${user.nom ?? ''}" 
         : (user?.nomUtilisateur ?? 'Utilisateur');
@@ -61,11 +132,12 @@ class _GainsScreenState extends State<GainsScreen> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadData,
+          color: AppColors.primary,
           child: Column(
             children: [
-              // --- HEADER CARTE ORANGE ---
+              // --- HEADER CARTE ORANGE (Inchangé) ---
               Container(
-                margin: const EdgeInsets.all(16),
+                margin: const EdgeInsets.fromLTRB(16, 16, 16, 10),
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
@@ -91,55 +163,57 @@ class _GainsScreenState extends State<GainsScreen> {
                         Text(displayName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                         CircleAvatar(
                           radius: 16,
-                          backgroundImage: NetworkImage(user?.photoUrl ?? 'https://via.placeholder.com/150'),
                           backgroundColor: Colors.white24,
+                          backgroundImage: (user?.photoUrl != null) 
+                            ? NetworkImage(user!.photoUrl!.startsWith('http') 
+                                ? user.photoUrl! 
+                                : "$_baseUrl/uploads/profile/${user.photoUrl}") 
+                            : null,
+                          child: user?.photoUrl == null ? const Icon(Icons.person, color: Colors.white) : null,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 30),
-                    const Text("Solde actuel", style: TextStyle(color: Colors.white70, fontSize: 14, letterSpacing: 1)),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 25),
+                    const Text("Solde actuel", style: TextStyle(color: Colors.white70, fontSize: 13, letterSpacing: 1)),
+                    const SizedBox(height: 8),
                     
-                    // --- SOLDE + OEIL ---
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          _isBalanceVisible ? "${_solde.toInt()} FCFA" : "••••••",
-                          style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
+                          authService.showBalance ? "${_solde.toInt()} FCFA" : "••••••",
+                          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
                         ),
-                        const SizedBox(width: 15),
+                        const SizedBox(width: 10),
                         GestureDetector(
-                          onTap: () => setState(() => _isBalanceVisible = !_isBalanceVisible),
+                          onTap: () => authService.toggleBalance(),
                           child: Icon(
-                            _isBalanceVisible ? Icons.visibility : Icons.visibility_off,
+                            authService.showBalance ? Icons.visibility : Icons.visibility_off,
                             color: Colors.white70,
-                            size: 28,
+                            size: 24,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 25),
                     
-                    // Bouton Retirer Blanc
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: const Color(0xFFFF6B35),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                           elevation: 0,
                         ),
                         onPressed: () {
-                           // On passe le solde à l'écran suivant pour éviter de recharger
                            Navigator.push(
                              context, 
                              MaterialPageRoute(builder: (_) => WithdrawAmountScreen(currentBalance: _solde))
                            );
                         },
-                        child: const Text("Retirer", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        child: const Text("Faire un retrait", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       ),
                     ),
                   ],
@@ -148,138 +222,30 @@ class _GainsScreenState extends State<GainsScreen> {
 
               // --- BARRE D'ONGLETS ---
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Container(
-                  height: 60,
+                  height: 55,
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(30),
                   ),
                   child: Row(
                     children: [
-                      // Onglet Actif (Maison/Gains)
-                      Expanded(
-                        child: Container(
-                          margin: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.1), 
-                            borderRadius: BorderRadius.circular(12)
-                          ),
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.monetization_on, color: Colors.green),
-                              Text("Gains", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold))
-                            ],
-                          ),
-                        ),
-                      ),
-                      // Séparateur
-                      Container(width: 1, height: 30, color: Colors.grey[200]),
-                      // Onglet Passif (Retrait rapide)
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => WithdrawAmountScreen(currentBalance: _solde))),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.outbond, color: Colors.grey[400]),
-                              Text("Retirer", style: TextStyle(color: Colors.grey[400], fontSize: 10, fontWeight: FontWeight.bold))
-                            ],
-                          ),
-                        ),
-                      ),
+                      _buildTabButton("Gains", Icons.monetization_on, 0),
+                      _buildTabButton("Transactions", Icons.history, 1),
                     ],
                   ),
                 ),
               ),
 
-              // --- TITRE HISTORIQUE ---
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 25, 20, 10),
-                child: Align(alignment: Alignment.centerLeft, child: Text("Historique des transactions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark))),
-              ),
-
-              // --- LISTE HISTORIQUE ---
+              // --- CONTENU PRINCIPAL ---
               Expanded(
                 child: _isLoading 
                   ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                  : _history.isEmpty
-                    ? Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.history, size: 60, color: Colors.grey[300]),
-                          const SizedBox(height: 10),
-                          Text("Aucun historique récent", style: TextStyle(color: Colors.grey[400])),
-                        ],
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-                        itemCount: _history.length,
-                        itemBuilder: (context, index) {
-                          final item = _history[index];
-                          
-                          // Gestion des statuts et couleurs
-                          String statusText = item['statut'] ?? 'En attente';
-                          Color statusColor = Colors.orange;
-                          IconData statusIcon = Icons.access_time;
-                          
-                          if (statusText == 'traite') {
-                            statusText = "Succès";
-                            statusColor = Colors.green;
-                            statusIcon = Icons.check_circle;
-                          } else if (statusText == 'rejete') {
-                            statusText = "Échoué";
-                            statusColor = Colors.red;
-                            statusIcon = Icons.cancel;
-                          }
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white, 
-                              borderRadius: BorderRadius.circular(16), 
-                              boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
-                                  child: Icon(Icons.account_balance, color: statusColor, size: 22),
-                                ),
-                                const SizedBox(width: 15),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text("Retrait ${item['operator'] ?? 'Mobile'}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                                      const SizedBox(height: 4),
-                                      Text(item['date'] != null ? item['date'].toString().substring(0, 10) : 'Date inconnue', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                                    ],
-                                  ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text("-${item['montant']} F", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        Icon(statusIcon, size: 12, color: statusColor),
-                                        const SizedBox(width: 4),
-                                        Text(statusText, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w600)),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                  : _currentTab == 0 
+                      ? _buildGainsView()       
+                      : _buildTransactionsView(),
               ),
             ],
           ),
@@ -288,16 +254,256 @@ class _GainsScreenState extends State<GainsScreen> {
     );
   }
 
- Widget _buildTabItem(IconData icon, bool isActive) {
+  Widget _buildTabButton(String label, IconData icon, int index) {
+    final bool isActive = _currentTab == index;
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.green : Colors.transparent,
-          borderRadius: BorderRadius.circular(15),
+      child: GestureDetector(
+        onTap: () => setState(() => _currentTab = index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(25),
+            boxShadow: isActive 
+              ? [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4, offset: const Offset(0, 2))]
+              : [],
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: isActive ? Colors.green : Colors.grey[500], size: 20),
+              const SizedBox(width: 8),
+              Text(label, style: TextStyle(color: isActive ? Colors.black87 : Colors.grey[500], fontSize: 14, fontWeight: isActive ? FontWeight.bold : FontWeight.w500))
+            ],
+          ),
         ),
-        child: Icon(icon, color: isActive ? Colors.white : Colors.grey[400], size: 24),
       ),
     );
+  }
+
+  // --- VUE GAINS (AVEC CLIC ACTIVÉ) ---
+  Widget _buildGainsView() {
+    return Column(
+      children: [
+        // Filtres
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildFilterIcon(Icons.grid_view_rounded, 'Tous', 'tous', const Color(0xFFFF6B35)),
+              _buildFilterIcon(Icons.attach_money, 'Argent', 'argent', const Color(0xFFC0C0C0)), 
+              _buildFilterIcon(Icons.workspace_premium, 'Gold', 'gold', const Color(0xFFFFD700)), 
+              _buildFilterIcon(Icons.diamond, 'Diamant', 'diamant', const Color(0xFF00BCD4)), 
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 5),
+
+        Expanded(
+          child: _filteredVideoHistory.isEmpty
+            ? _buildEmptyState("Aucun gain trouvé pour ce filtre.")
+            : ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                itemCount: _filteredVideoHistory.length,
+                itemBuilder: (context, index) {
+                  final item = _filteredVideoHistory[index];
+                  final amount = _getAmountForPack(item['id_pack']);
+                  final dateStr = item['date_creation'] ?? item['date_interaction'];
+                  final dateDisplay = dateStr != null ? dateStr.toString().substring(0, 10) : '';
+
+                  // 👇 C'EST ICI LE CLIC POUR LA VIDÉO
+                  return GestureDetector(
+                    onTap: () => _playVideo(item), // Lance la vidéo au clic
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10)],
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 45, height: 45,
+                            decoration: BoxDecoration(
+                              color: _getPackColor(item['id_pack']).withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            // Petite icône Play pour montrer que c'est cliquable
+                            child: Icon(Icons.play_arrow, color: _getPackColor(item['id_pack'])),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item['titre'] ?? 'Promotion', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                const SizedBox(height: 4),
+                                Text("Regardé le $dateDisplay", style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text("+ $amount F", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
+                              const SizedBox(height: 4),
+                              Text("Validé", style: TextStyle(color: Colors.green[700], fontSize: 10, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilterIcon(IconData icon, String label, String value, Color color) {
+    final bool isSelected = _gainFilter == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _gainFilter = value;
+          _applyGainFilter();
+        });
+      },
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 50, height: 50,
+            decoration: BoxDecoration(
+              color: isSelected ? color : Colors.white,
+              shape: BoxShape.circle,
+              border: isSelected ? null : Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: (isSelected ? color : Colors.grey).withOpacity(0.25),
+                  blurRadius: isSelected ? 8 : 4,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(icon, color: isSelected ? Colors.white : color, size: 24),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? color : Colors.grey[500])),
+        ],
+      ),
+    );
+  }
+
+ Widget _buildTransactionsView() {
+    if (_withdrawHistory.isEmpty) return _buildEmptyState("Aucune transaction effectuée.");
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      itemCount: _withdrawHistory.length,
+      itemBuilder: (context, index) {
+        final item = _withdrawHistory[index];
+        
+        String statusText = item['statut'] ?? 'En attente';
+        Color statusColor = Colors.orange;
+        IconData statusIcon = Icons.access_time;
+        
+        if (statusText == 'traite' || statusText == 'succes') {
+          statusText = "Succès";
+          statusColor = Colors.green;
+          statusIcon = Icons.check_circle;
+        } else if (statusText == 'rejete' || statusText == 'echec') {
+          statusText = "Échoué";
+          statusColor = Colors.red;
+          statusIcon = Icons.cancel;
+        }
+
+        // 👇 C'EST ICI LE CHANGEMENT : GESTURE DETECTOR
+        return GestureDetector(
+          onTap: () {
+            // Navigation vers l'écran de détail
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => TransactionDetailsScreen(transaction: item),
+              ),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white, 
+              borderRadius: BorderRadius.circular(16), 
+              boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10)]
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                  child: Icon(Icons.outbond, color: statusColor, size: 22),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Retrait ${item['operator'] ?? 'Mobile'}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      const SizedBox(height: 4),
+                      Text(item['date'] != null ? item['date'].toString().substring(0, 10) : 'Date inconnue', style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text("-${item['montant']} F", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(statusIcon, size: 12, color: statusColor),
+                        const SizedBox(width: 4),
+                        Text(statusText, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState(String message) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.history, size: 60, color: Colors.grey[300]),
+          const SizedBox(height: 10),
+          Text(message, style: TextStyle(color: Colors.grey[400])),
+        ],
+      ),
+    );
+  }
+
+  Color _getPackColor(dynamic packId) {
+    int id = packId is int ? packId : int.tryParse(packId.toString()) ?? 0;
+    switch (id) {
+      case 1: return Colors.grey;
+      case 2: return const Color(0xFFFFD700);
+      case 3: return Colors.cyan;
+      default: return AppColors.primary;
+    }
   }
 }

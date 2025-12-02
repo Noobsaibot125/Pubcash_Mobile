@@ -11,14 +11,22 @@ class User {
   final String? genre;
   final String? photoUrl;
   final String? imageBackground;
+  
+  // Champs pour la logique sociale
   final String? idGoogle;
   final String? idFacebook;
+  
   final String? codeParrainage;
   final int points;
   final double solde;
   final List<dynamic>? referrals;
+  
+  // Nouveau champ (optionnel mais utile vu que le backend l'envoie)
+  final String? pushNotification;
 
-  // URL DE BASE DE TON API (Indispensable pour reconstruire les liens d'images)
+  // ⚠️ IMPORTANT : Change ceci selon ton environnement
+  // En local : "http://192.168.1.15:5000"
+  // En production : "https://pub-cash.com"
   static const String baseUrl = "https://pub-cash.com";
 
   User({
@@ -40,8 +48,10 @@ class User {
     this.points = 0,
     this.solde = 0.0,
     this.referrals,
+    this.pushNotification,
   });
 
+  // 👇 C'est cette propriété qui est utilisée dans profile_screen.dart
   bool get isSocialUser =>
       (idGoogle != null && idGoogle!.isNotEmpty) ||
       (idFacebook != null && idFacebook!.isNotEmpty);
@@ -55,7 +65,7 @@ class User {
       nom: _safeString(json['nom']),
       prenom: _safeString(json['prenom']),
 
-      // Gestion des variantes de noms de champs pour la commune
+      // Gestion intelligente : backend envoie parfois 'commune_choisie', parfois 'commune'
       commune: _safeString(json['commune_choisie']) ?? _safeString(json['commune']),
 
       ville: _safeString(json['ville']),
@@ -63,8 +73,8 @@ class User {
       contact: _safeString(json['contact']),
       genre: _safeString(json['genre']),
 
-      // --- CORRECTION DES IMAGES (Même logique que React) ---
-      // On passe le nom court (ex: photo.jpg), l'url complète si elle existe, et le dossier cible
+      // --- CONSTRUCTION DES URLS ---
+      // Si l'URL commence par http, on la garde, sinon on construit le chemin complet
       photoUrl: _constructFullUrl(
         json['photo_profil'], 
         json['profile_image_url'], 
@@ -76,13 +86,16 @@ class User {
         json['background_image_url'], 
         'background'
       ),
-      // -----------------------------------------------------
+      // -----------------------------
 
       idGoogle: _safeString(json['id_google']),
       idFacebook: _safeString(json['id_facebook']),
       codeParrainage: _safeString(json['code_parrainage']),
+      pushNotification: _safeString(json['push_notification']),
 
       points: _safeInt(json['points']),
+      
+      // Gère 'remuneration_utilisateur' ou 'solde'
       solde: _safeDouble(json['remuneration_utilisateur']) ?? 
              _safeDouble(json['solde']) ?? 0.0,
 
@@ -103,22 +116,28 @@ class User {
       'contact': contact,
       'genre': genre,
       'code_parrainage': codeParrainage,
+      'id_google': idGoogle,
+      'id_facebook': idFacebook,
     };
   }
 
   // --- FONCTION UTILITAIRE POUR RECONSTRUIRE L'URL ---
   static String? _constructFullUrl(dynamic shortName, dynamic fullUrl, String folder) {
-    // 1. Si le backend envoie déjà une URL complète (commençant par http), on la garde.
+    // 1. Si on a déjà une URL complète qui vient de Facebook/Google ou du backend
     if (fullUrl != null && fullUrl.toString().startsWith('http')) {
       return fullUrl.toString();
+    }
+    // Cas spécial Facebook/Google renvoyés dans le champ court
+    if (shortName != null && shortName.toString().startsWith('http')) {
+      return shortName.toString();
     }
     
     // 2. Sinon, on récupère le nom du fichier (ex: image.jpg)
     String? filename = _safeString(shortName);
     
-    // 3. On construit l'URL complète manuellement : https://site.com/uploads/dossier/image.jpg
+    // 3. On construit l'URL complète manuellement
     if (filename != null && filename.isNotEmpty) {
-      // Sécurité : on remplace les antislashs Windows (\) par des slashs (/)
+      // Sécurité pour les chemins Windows
       filename = filename.replaceAll('\\', '/');
       return "$baseUrl/uploads/$folder/$filename"; 
     }
@@ -126,7 +145,7 @@ class User {
     return null;
   }
 
-  // --- HELPERS DE NETTOYAGE DE DONNÉES ---
+  // --- HELPERS DE SÉCURITÉ (Évite les crashs sur null) ---
   static String? _safeString(dynamic value) {
     if (value == null) return null;
     if (value is String) {

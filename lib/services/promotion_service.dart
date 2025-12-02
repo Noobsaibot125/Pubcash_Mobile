@@ -1,5 +1,6 @@
 import '../models/promotion.dart';
 import 'api_service.dart';
+import 'package:dio/dio.dart'; // Assure-toi d'avoir dio
 import '../utils/api_constants.dart'; // N'oublie pas d'importer tes constantes
 import '../utils/device_utils.dart';
 class PromotionService {
@@ -103,23 +104,28 @@ class PromotionService {
       rethrow;
     }
   }
-  Future<void> markPromotionAsViewed(int promoId) async {
+ Future<void> markPromotionAsViewed(int promoId) async {
     try {
-      // 1. On récupère l'ID unique de l'appareil
       String? deviceId = await DeviceUtils.getDeviceId();
 
-      // 2. On l'envoie au serveur
       await _apiService.post(
-        '${ApiConstants.promotions}/$promoId/view', // Route: /api/promotions/:id/view
+        '${ApiConstants.promotions}/$promoId/view',
         data: {
-          'device_id': deviceId, // <--- C'est ici que la magie opère
+          'device_id': deviceId,
         },
       );
       print("Vue validée avec succès pour l'appareil: $deviceId");
       
     } catch (e) {
       print("Erreur validation vue: $e");
-      // C'est ici que l'erreur 403 (Fraude) sera attrapée si l'appareil a déjà vu la vidéo
+      
+      // --- MODIFICATION ICI ---
+      if (e is DioException) {
+        if (e.response?.statusCode == 403) {
+           // On lance une erreur spécifique pour la fraude
+           throw "DEVICE_FRAUD"; 
+        }
+      }
       rethrow; 
     }
   }

@@ -14,7 +14,13 @@ import 'notifications_screen.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  final VoidCallback? goToProfile;
+final Function(int)? onVideoCountChanged;
+  const HomeScreen({
+    Key? key, 
+    this.goToProfile, 
+    this.onVideoCountChanged // 👈 Ajout au constructeur
+  }) : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -40,8 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _filter = 'toutes';
   bool _isInit = true;
 
-  // Pour cacher/montrer le solde
-  bool _showBalance = true;
+ 
 
    @override
   void initState() {
@@ -61,32 +66,20 @@ class _HomeScreenState extends State<HomeScreen> {
     // ============================================================
     SocketService().connect();
     
-    _socketSubscription = SocketService().newVideoStream.listen((videoData) {
+   _socketSubscription = SocketService().newVideoStream.listen((videoData) {
       if (!mounted) return;
-      
-      print('🎬 Nouvelle vidéo reçue dans HomeScreen: ${videoData['titre']}');
-      
-      // Vérifier si la vidéo correspond au filtre actuel
-      bool shouldShow = _shouldShowVideo(videoData);
-      
-      if (shouldShow) {
+      if (_shouldShowVideo(videoData)) {
         try {
-          // Convertir les données Socket.IO en objet Promotion
           final newPromotion = Promotion.fromJson(videoData);
-          
           setState(() {
-            // Ajouter la nouvelle vidéo en haut de la liste
             _promotions.insert(0, newPromotion);
           });
-          
-          print('✅ Vidéo ajoutée à la liste: ${newPromotion.titre}');
-        } catch (e) {
-          print('❌ Erreur lors de la conversion de la vidéo: $e');
-        }
-      } else {
-        print('⏭️ Vidéo ignorée (ne correspond pas au filtre actuel)');
+          // 👇 MISE A JOUR DU COMPTEUR TEMPS RÉEL
+          widget.onVideoCountChanged?.call(_promotions.length);
+        } catch (e) { print(e); }
       }
     });
+    
     // ============================================================
     
     // ============================================================
@@ -125,11 +118,8 @@ void dispose() {
     final authService = Provider.of<AuthService>(context, listen: false);
 
     try {
-      // 1. Charger profil user
       await authService.refreshUserProfile();
       
-      // 2. Charger les données API en parallèle
-      // Note: getUnreadCount va aussi déclencher le Stream, donc _unreadCount se mettra à jour
       final results = await Future.wait([
         _promotionService.getPromotions(filter: _filter),
         _promotionService.getEarnings(),
@@ -138,7 +128,6 @@ void dispose() {
 
       final promos = results[0] as List<Promotion>;
       final earnings = results[1] as Map<String, dynamic>;
-      // results[2] est le count, mais le stream le gère aussi. On le prend quand même.
       final unread = results[2] as int;
       
       if (mounted) {
@@ -149,6 +138,10 @@ void dispose() {
           _unreadCount = unread;
           _loading = false;
         });
+
+        // 👇 C'EST ICI QU'ON ENVOIE LE NOMBRE AU PARENT
+        // On le fait après le setState pour être sûr d'avoir la bonne longueur
+        widget.onVideoCountChanged?.call(_promotions.length);
       }
     } catch (e) {
       print("Erreur globale chargement home: $e");
@@ -156,29 +149,38 @@ void dispose() {
     }
   }
 
-  void _openVideoPlayer(Promotion promo) {
+ void _openVideoPlayer(Promotion promo) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => FullScreenVideoScreen(
           promotion: promo,
           onVideoViewed: () {
-             _loadData();
+             // 1. D'abord on supprime VISUELLEMENT la vidéo de la liste immédiatement
+             setState(() {
+               _promotions.removeWhere((p) => p.id == promo.id);
+               // Mise à jour du compteur pour le parent
+               widget.onVideoCountChanged?.call(_promotions.length);
+             });
+
+             // 2. Ensuite on recharge les données (pour récupérer le solde à jour, etc.)
+             // Si c'était une fraude, la vidéo ne reviendra pas car on l'a supprimée de la vue courante
+             // ou on peut éviter le _loadData() si on veut être sûr qu'elle ne revienne pas avant le prochain restart.
+             _loadData(); 
           },
         ),
       ),
     );
   }
 
-  String? _getProfileImageUrl(String? photoUrl) {
+ String? _getProfileImageUrl(String? photoUrl) {
     if (photoUrl == null || photoUrl.isEmpty) return null;
     if (photoUrl.startsWith('http')) {
-      return "$photoUrl?v=${DateTime.now().millisecondsSinceEpoch}";
+      return photoUrl;
     }
     const String baseUrl = "http://192.168.1.15:5000"; 
-    return "$baseUrl/uploads/profile/$photoUrl?v=${DateTime.now().millisecondsSinceEpoch}";
+    return "$baseUrl/uploads/profile/$photoUrl";
   }
-
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
@@ -252,13 +254,17 @@ void dispose() {
                     ],
                   ),
 
-                  // --- PROFIL UTILISATEUR ---
+                 // --- PROFIL UTILISATEUR ---
                   GestureDetector(
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const ProfileScreen()),
-                      );
+                      // 👇 MODIFICATION : On utilise le callback pour changer d'onglet
+                      // au lieu de faire Navigator.push
+                      if (widget.goToProfile != null) {
+                        widget.goToProfile!();
+                      } else {
+                         // Fallback si jamais on n'a pas le callback (cas rare)
+                         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+                      }
                     },
                     child: Padding(
                       padding: const EdgeInsets.only(right: 15.0, left: 5.0),
@@ -329,31 +335,37 @@ void dispose() {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                                  textBaseline: TextBaseline.alphabetic,
-                                  children: [
-                                    Text(
-                                      _showBalance ? '${_earnings['total'] ?? 0}' : '••••',
-                                      style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold, height: 1),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    if (_showBalance)
-                                      const Text('FCFA', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
-                                  ],
-                                ),
-                                IconButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      _showBalance = !_showBalance;
-                                    });
-                                  },
-                                  icon: Icon(
-                                    _showBalance ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                    color: Colors.white.withOpacity(0.9),
-                                    size: 28,
-                                  ),
-                                ),
+                               Row(
+  crossAxisAlignment: CrossAxisAlignment.baseline,
+  textBaseline: TextBaseline.alphabetic,
+  children: [
+    Text(
+      // MODIFICATION ICI : On utilise authService.showBalance
+      authService.showBalance 
+          ? '${_earnings['total'] ?? 0}' 
+          : '••••',
+      style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.bold, height: 1),
+    ),
+    const SizedBox(width: 8),
+    // MODIFICATION ICI
+    if (authService.showBalance)
+      const Text('FCFA', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+  ],
+),
+IconButton(
+  onPressed: () {
+    // MODIFICATION ICI : On appelle la méthode globale
+    authService.toggleBalance();
+  },
+  icon: Icon(
+    // MODIFICATION ICI
+    authService.showBalance 
+        ? Icons.visibility_outlined 
+        : Icons.visibility_off_outlined,
+    color: Colors.white.withOpacity(0.9),
+    size: 28,
+  ),
+),
                               ],
                             ),
                           ],

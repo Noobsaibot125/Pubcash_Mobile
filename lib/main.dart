@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // 👈 1. IMPORT OBLIGATOIRE POUR LE SYSTEMCHROME
+import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'services/auth_service.dart';
@@ -16,20 +16,23 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 👇 2. AJOUT : C'EST ICI QU'ON ENLÈVE L'EFFET DE "MARGE" EN BAS
-  // On active le mode "Edge to Edge" pour que l'app prenne tout l'écran
+  // On garde le edgeToEdge pour un rendu moderne
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  // On configure la couleur de la barre pour qu'elle soit transparente ou blanche
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    // En mettant transparent, le fond de ton app sera visible derrière les boutons
-    systemNavigationBarColor: Colors.transparent, 
-    // On met les icônes (rond, carré, triangle) en noir pour qu'on les voie sur fond clair
+    // 👇 CORRECTION : On met BLANC ici pour prolonger ta barre de menu
+    systemNavigationBarColor: Colors.white, 
+    
+    // Pas de ligne de séparation
+    systemNavigationBarDividerColor: Colors.transparent, 
+    
+    // Icônes foncées (gris sombre) pour être visibles sur le blanc
     systemNavigationBarIconBrightness: Brightness.dark, 
+    
+    // Barre du haut transparente
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
   ));
-  // 👆 FIN DE L'AJOUT
 
   try {
     await Firebase.initializeApp();
@@ -43,6 +46,7 @@ void main() async {
   runApp(const MyApp());
 }
 
+// ... Le reste de la classe MyApp et AuthWrapper ne change pas
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
