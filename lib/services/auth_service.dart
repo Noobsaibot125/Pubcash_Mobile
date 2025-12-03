@@ -491,16 +491,18 @@ class AuthService with ChangeNotifier {
   // 6. HELPERS
   // =========================================================
 
-  Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
+ Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
     final String accessToken = data['accessToken']?.toString() ?? '';
     final String refreshToken = data['refreshToken']?.toString() ?? '';
 
     if (accessToken.isEmpty) throw Exception("Token manquant");
 
+    // 1. On sauvegarde les tokens
     await _secureStorage.write(key: 'access_token', value: accessToken);
     await _secureStorage.write(key: 'refresh_token', value: refreshToken);
     _token = accessToken;
 
+    // 2. On charge l'utilisateur temporaire envoyé par le login
     if (data['user'] != null) {
       try {
         _currentUser = User.fromJson(data['user']);
@@ -509,18 +511,35 @@ class AuthService with ChangeNotifier {
       }
     }
 
-    if (data['profileCompleted'] == false) {
-      _requiresProfileCompletion = true;
-    } else {
-      _checkIfProfileIsComplete();
+    // ============================================================
+    // ✅ CORRECTION MAJEURE ICI
+    // ============================================================
+    // On ne se fie pas uniquement aux données du login (souvent incomplètes).
+    // On force un appel API pour récupérer le profil COMPLET immédiatement.
+    try {
+      print("🔄 Récupération du profil complet avant vérification...");
+      await refreshUserProfile(); 
+    } catch (e) {
+      print("⚠️ Impossible de rafraîchir le profil immédiatement: $e");
     }
+    // ============================================================
+
+    // 3. Maintenant on vérifie si le profil est complet sur la base des données FRAÎCHES
+    // On ignore le flag 'profileCompleted' du backend s'il est faux, 
+    // et on recalcule nous-même avec _checkIfProfileIsComplete().
+    _checkIfProfileIsComplete();
 
     notifyListeners();
 
     // Initialisation des notifications une fois connecté
     print("🔔 Initialisation OneSignal...");
-    NotificationService().initialiser();
+    try {
+       NotificationService().initialiser();
+    } catch(e) {
+       print("Erreur OneSignal init: $e");
+    }
 
+    // 4. Si après le refresh, il manque toujours des infos, alors on redirige
     if (_requiresProfileCompletion) {
       throw IncompleteProfileException();
     }

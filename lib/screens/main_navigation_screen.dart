@@ -14,8 +14,6 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
-  
-  // 👇 AJOUT : Variable pour stocker le nombre de vidéos
   int _videoBadgeCount = 0;
 
   void _onItemTapped(int index) {
@@ -23,12 +21,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _selectedIndex = index;
     });
   }
-  
-  // 👇 AJOUT : Méthode appelée par HomeScreen quand les données chargent
+
   void _updateVideoCount(int count) {
-      // On ne fait le setState que si le nombre a changé pour éviter des rebuilds inutiles
       if (_videoBadgeCount != count) {
-        // On utilise addPostFrameCallback pour éviter les erreurs de setState pendant le build
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             setState(() {
@@ -41,10 +36,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Liste des écrans
     final List<Widget> screens = [
       HomeScreen(
-        goToProfile: () => _onItemTapped(3), 
-        // 👇 CONNEXION : On passe la fonction de mise à jour
+        goToProfile: () => _onItemTapped(3),
         onVideoCountChanged: _updateVideoCount,
       ),
       const GainsScreen(),
@@ -52,12 +47,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const ProfileScreen(),
     ];
     
-    // Couleurs
     final whatsappDarkGreen = const Color(0xFFFF6B35); 
     final whatsappLightGreen = whatsappDarkGreen.withOpacity(0.2); 
 
     return Scaffold(
-      body: screens[_selectedIndex],
+      // 👇👇👇 CORRECTION MAJEURE ICI 👇👇👇
+      // Au lieu de 'body: screens[_selectedIndex]', on utilise IndexedStack
+      body: IndexedStack(
+        index: _selectedIndex, // L'écran actif est celui qui correspond à l'index
+        children: screens,     // Tous les écrans sont chargés en mémoire, empilés
+      ),
+      // 👆👆👆 FIN DE LA CORRECTION 👆👆👆
       
       bottomNavigationBar: NavigationBarTheme(
         data: NavigationBarThemeData(
@@ -77,12 +77,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           onDestinationSelected: _onItemTapped, 
           animationDuration: const Duration(seconds: 1),
           destinations: [
-            // === ONGLETS ===
             NavigationDestination(
               icon: Badge(
-                // 👇 DYNAMIQUE : On affiche le nombre réel
                 label: Text('$_videoBadgeCount'),
-                // 👇 PROPRE : On cache le badge si 0 vidéo
                 isLabelVisible: _videoBadgeCount > 0, 
                 backgroundColor: whatsappDarkGreen,
                 textColor: Colors.white,
