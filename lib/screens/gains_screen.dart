@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/promotion_service.dart';
 import '../../utils/colors.dart';
 import 'package:pubcash_mobile/screens/gains/withdraw_amount_screen.dart';
-import 'simple_video_player.dart'; // 👈 IMPORT DU LECTEUR
-import 'package:pubcash_mobile/screens/gains/transaction_details_screen.dart'; // 👈 IMPORT DE LA NOUVELLE PAGE
+import 'simple_video_player.dart'; // ðŸ‘ˆ IMPORT DU LECTEUR
+import 'package:pubcash_mobile/screens/gains/transaction_details_screen.dart'; // ðŸ‘ˆ IMPORT DE LA NOUVELLE PAGE
 
 class GainsScreen extends StatefulWidget {
   const GainsScreen({super.key});
@@ -45,10 +45,10 @@ class _GainsScreenState extends State<GainsScreen> {
       final earningsData = await _promotionService.getEarnings();
       final withdrawHistory = await _promotionService.getWithdrawHistory();
       
-      // On récupère l'historique complet
+      // On rÃ©cupÃ¨re l'historique complet
       final videoHistoryRaw = await _promotionService.getInteractionHistory();
       
-      // On garde les VUES (gains validés)
+      // On garde les VUES (gains validÃ©s)
       final videoGains = videoHistoryRaw.where((item) => item['type_interaction'] == 'vue').toList();
 
       if (mounted) {
@@ -66,10 +66,10 @@ class _GainsScreenState extends State<GainsScreen> {
     }
   }
 
-  // --- METHODE POUR JOUER LA VIDEO (Similaire à History) ---
+  // --- METHODE POUR JOUER LA VIDEO (Similaire Ã  History) ---
   void _playVideo(Map<String, dynamic> videoData) {
     String? videoUrl = videoData['url_video'];
-    String titre = videoData['titre'] ?? 'Vidéo Gain';
+    String titre = videoData['titre'] ?? 'VidÃ©o Gain';
 
     if (videoUrl != null && videoUrl.isNotEmpty) {
       // Reconstruction de l'URL si relative
@@ -83,12 +83,15 @@ class _GainsScreenState extends State<GainsScreen> {
           builder: (context) => SimpleVideoPlayer(
             videoUrl: videoUrl!,
             title: titre,
+            promotionId: videoData['id_promotion'] ?? videoData['id'],
+            promoterName: videoData['nom_promoteur'] ?? titre,
+            promoterAvatar: videoData['photo_promoteur'],
           ),
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Vidéo indisponible (trop ancienne ou supprimée)")),
+        const SnackBar(content: Text("VidÃ©o indisponible (trop ancienne ou supprimÃ©e)")),
       );
     }
   }
@@ -135,7 +138,7 @@ class _GainsScreenState extends State<GainsScreen> {
           color: AppColors.primary,
           child: Column(
             children: [
-              // --- HEADER CARTE ORANGE (Inchangé) ---
+              // --- HEADER CARTE ORANGE (InchangÃ©) ---
               Container(
                 margin: const EdgeInsets.fromLTRB(16, 16, 16, 10),
                 padding: const EdgeInsets.all(20),
@@ -181,7 +184,7 @@ class _GainsScreenState extends State<GainsScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          authService.showBalance ? "${_solde.toInt()} FCFA" : "••••••",
+                          authService.showBalance ? "${_solde.toInt()} FCFA" : "â€¢â€¢â€¢â€¢â€¢â€¢",
                           style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(width: 10),
@@ -283,7 +286,7 @@ class _GainsScreenState extends State<GainsScreen> {
     );
   }
 
-  // --- VUE GAINS (AVEC CLIC ACTIVÉ) ---
+  // --- VUE GAINS (AVEC CLIC ACTIVÃ‰) ---
   Widget _buildGainsView() {
     return Column(
       children: [
@@ -305,7 +308,7 @@ class _GainsScreenState extends State<GainsScreen> {
 
         Expanded(
           child: _filteredVideoHistory.isEmpty
-            ? _buildEmptyState("Aucun gain trouvé pour ce filtre.")
+            ? _buildEmptyState("Aucun gain trouvÃ© pour ce filtre.")
             : ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 itemCount: _filteredVideoHistory.length,
@@ -315,9 +318,9 @@ class _GainsScreenState extends State<GainsScreen> {
                   final dateStr = item['date_creation'] ?? item['date_interaction'];
                   final dateDisplay = dateStr != null ? dateStr.toString().substring(0, 10) : '';
 
-                  // 👇 C'EST ICI LE CLIC POUR LA VIDÉO
+                  // ðŸ‘‡ C'EST ICI LE CLIC POUR LA VIDÃ‰O
                   return GestureDetector(
-                    onTap: () => _playVideo(item), // Lance la vidéo au clic
+                    onTap: () => _playVideo(item), // Lance la vidÃ©o au clic
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(12),
@@ -334,7 +337,7 @@ class _GainsScreenState extends State<GainsScreen> {
                               color: _getPackColor(item['id_pack']).withOpacity(0.1),
                               shape: BoxShape.circle,
                             ),
-                            // Petite icône Play pour montrer que c'est cliquable
+                            // Petite icÃ´ne Play pour montrer que c'est cliquable
                             child: Icon(Icons.play_arrow, color: _getPackColor(item['id_pack'])),
                           ),
                           const SizedBox(width: 15),
@@ -344,7 +347,7 @@ class _GainsScreenState extends State<GainsScreen> {
                               children: [
                                 Text(item['titre'] ?? 'Promotion', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                                 const SizedBox(height: 4),
-                                Text("Regardé le $dateDisplay", style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                                Text("RegardÃ© le $dateDisplay", style: TextStyle(color: Colors.grey[500], fontSize: 11)),
                               ],
                             ),
                           ),
@@ -353,7 +356,7 @@ class _GainsScreenState extends State<GainsScreen> {
                             children: [
                               Text("+ $amount F", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
                               const SizedBox(height: 4),
-                              Text("Validé", style: TextStyle(color: Colors.green[700], fontSize: 10, fontWeight: FontWeight.w600)),
+                              Text("ValidÃ©", style: TextStyle(color: Colors.green[700], fontSize: 10, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ],
@@ -403,7 +406,7 @@ class _GainsScreenState extends State<GainsScreen> {
   }
 
  Widget _buildTransactionsView() {
-    if (_withdrawHistory.isEmpty) return _buildEmptyState("Aucune transaction effectuée.");
+    if (_withdrawHistory.isEmpty) return _buildEmptyState("Aucune transaction effectuÃ©e.");
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -416,19 +419,19 @@ class _GainsScreenState extends State<GainsScreen> {
         IconData statusIcon = Icons.access_time;
         
         if (statusText == 'traite' || statusText == 'succes') {
-          statusText = "Succès";
+          statusText = "SuccÃ¨s";
           statusColor = Colors.green;
           statusIcon = Icons.check_circle;
         } else if (statusText == 'rejete' || statusText == 'echec') {
-          statusText = "Échoué";
+          statusText = "Ã‰chouÃ©";
           statusColor = Colors.red;
           statusIcon = Icons.cancel;
         }
 
-        // 👇 C'EST ICI LE CHANGEMENT : GESTURE DETECTOR
+        // ðŸ‘‡ C'EST ICI LE CHANGEMENT : GESTURE DETECTOR
         return GestureDetector(
           onTap: () {
-            // Navigation vers l'écran de détail
+            // Navigation vers l'Ã©cran de dÃ©tail
             Navigator.push(
               context,
               MaterialPageRoute(

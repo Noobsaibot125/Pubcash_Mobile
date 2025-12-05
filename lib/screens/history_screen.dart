@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../services/promotion_service.dart';
 import '../utils/colors.dart';
-import 'simple_video_player.dart'; // Importe le nouveau fichier // Nous allons créer ce fichier juste après
+import 'simple_video_player.dart'; // Importe le nouveau fichier // Nous allons crÃ©er ce fichier juste aprÃ¨s
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -27,15 +27,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
       // 1. Charger l'historique des interactions
       final interactions = await _promotionService.getInteractionHistory();
       
-      // 2. Filtrer et Traiter les données
+      // 2. Filtrer et Traiter les donnÃ©es
       final now = DateTime.now();
       
       final List<dynamic> filteredVideos = interactions.where((item) {
         // A. Garder uniquement les VUES
         if (item['type_interaction'] != 'vue') return false;
 
-        // B. Logique des 7 jours (Masquer côté mobile si > 7 jours)
-        // Note: La suppression réelle doit se faire côté Backend (voir fin de ma réponse)
+        // B. Logique des 7 jours (Masquer cÃ´tÃ© mobile si > 7 jours)
+        // Note: La suppression rÃ©elle doit se faire cÃ´tÃ© Backend (voir fin de ma rÃ©ponse)
         DateTime? dateInteraction = DateTime.tryParse(item['date_interaction'].toString());
         if (dateInteraction != null) {
           final difference = now.difference(dateInteraction).inDays;
@@ -45,7 +45,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         return true;
       }).toList();
 
-      // 3. Tri par date décroissante
+      // 3. Tri par date dÃ©croissante
       filteredVideos.sort((a, b) {
          DateTime dateA = DateTime.tryParse(a['date_interaction'].toString()) ?? DateTime(2000);
          DateTime dateB = DateTime.tryParse(b['date_interaction'].toString()) ?? DateTime(2000);
@@ -79,7 +79,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
  void _playVideo(Map<String, dynamic> videoData) {
-    // Vérification stricte : est-ce que l'URL existe ?
+    // VÃ©rification stricte : est-ce que l'URL existe ?
     if (videoData['url_video'] != null && videoData['url_video'].toString().isNotEmpty) {
       
       Navigator.push(
@@ -88,17 +88,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
           builder: (context) => SimpleVideoPlayer(
             videoUrl: videoData['url_video'],
             title: videoData['titre'] ?? 'Relecture',
+            promotionId: videoData['id_promotion'] ?? videoData['id'],
+            promoterName: videoData['nom_promoteur'] ?? videoData['titre'],
+            promoterAvatar: videoData['photo_promoteur'],
           ),
         ),
       );
 
     } else {
-      // Si url_video est null (car supprimé par le serveur après 7 jours)
+      // Si url_video est null (car supprimÃ© par le serveur aprÃ¨s 7 jours)
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text("Vidéo indisponible"),
-          content: const Text("Cette vidéo a expiré car elle date de plus de 7 jours. Seul l'aperçu est conservé."),
+          title: const Text("VidÃ©o indisponible"),
+          content: const Text("Cette vidÃ©o a expirÃ© car elle date de plus de 7 jours. Seul l'aperÃ§u est conservÃ©."),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -181,7 +184,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                           child: const Icon(Icons.videocam, color: Colors.grey),
                                         ),
                                 ),
-                                // Petite icône "Play" par dessus pour inciter au clic
+                                // Petite icÃ´ne "Play" par dessus pour inciter au clic
                                 Container(
                                   padding: const EdgeInsets.all(4),
                                   decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
@@ -227,7 +230,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               ),
                             ),
                             
-                            // --- Flèche (Droite) ---
+                            // --- FlÃ¨che (Droite) ---
                             const Icon(Icons.chevron_right, color: Colors.grey),
                           ],
                         ),

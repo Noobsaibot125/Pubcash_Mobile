@@ -174,4 +174,30 @@ class PromotionService {
       // On ne rethrow pas forcément ici pour ne pas bloquer la fermeture de l'écran
     }
   }
+
+  // === NOUVEAU : AJOUTER UN COMMENTAIRE ===
+  Future<void> addComment(int promotionId, String comment) async {
+    try {
+      await _apiService.post(
+        '${ApiConstants.promotions}/$promotionId/comment',
+        data: {'commentaire': comment},
+      );
+    } catch (e) {
+      print("Erreur lors de l'ajout du commentaire: $e");
+      rethrow;
+    }
+  }
+
+  // === NOUVEAU : VÉRIFIER SI L'UTILISATEUR A DÉJÀ COMMENTÉ ===
+  Future<bool> hasComment(int promotionId) async {
+    try {
+      final response = await _apiService.get(
+        '${ApiConstants.promotions}/$promotionId/hasComment',
+      );
+      return response.data['hasComment'] ?? false;
+    } catch (e) {
+      print("Erreur lors de la vérification du commentaire: $e");
+      return false;
+    }
+  }
 }
