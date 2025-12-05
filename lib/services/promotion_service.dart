@@ -189,15 +189,25 @@ class PromotionService {
   }
 
   // === NOUVEAU : VÉRIFIER SI L'UTILISATEUR A DÉJÀ COMMENTÉ ===
-  Future<bool> hasComment(int promotionId) async {
-    try {
-      final response = await _apiService.get(
-        '${ApiConstants.promotions}/$promotionId/hasComment',
-      );
-      return response.data['hasComment'] ?? false;
-    } catch (e) {
-      print("Erreur lors de la vérification du commentaire: $e");
-      return false;
+ Future<bool> hasComment(int promotionId) async {
+  try {
+    final response = await _apiService.get(
+      '${ApiConstants.promotions}/$promotionId/hasComment',
+    );
+    
+    // --- DEBUG LOGS (Regarde ta console Flutter quand tu ouvres la page) ---
+    print("🔍 CHECK COMMENTAIRE (ID: $promotionId) : ${response.data}");
+    
+    // On gère le cas où le backend renvoie true, "true", 1, ou "1"
+    final val = response.data['hasComment'];
+    if (val == true || val.toString().toLowerCase() == 'true' || val == 1) {
+      return true;
     }
+    
+    return false;
+  } catch (e) {
+    print("❌ Erreur hasComment service: $e");
+    return false; 
   }
+}
 }

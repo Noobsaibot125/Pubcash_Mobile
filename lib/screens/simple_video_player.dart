@@ -30,17 +30,21 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
   bool _showControls = true;
   Timer? _hideTimer;
 
-  // === NOUVEAU : État pour les commentaires ===
+  // === ÉTAT COMMENTAIRES ===
   final TextEditingController _commentController = TextEditingController();
   final PromotionService _promotionService = PromotionService();
+  
   bool _isSendingComment = false;
-  bool _hasCommented = false; // Cache local pour cacher la barre après envoi
+  bool _hasCommented = false; 
+  bool _isLoadingCommentStatus = true; // Pour attendre la vérification avant d'afficher
+  
   int _wordCount = 0;
   static const int _maxWords = 200;
 
   @override
   void initState() {
     super.initState();
+    // Initialisation Vidéo
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
       ..initialize().then((_) {
         setState(() {
@@ -57,27 +61,36 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
     // Écouter les changements de texte pour compter les mots
     _commentController.addListener(_updateWordCount);
 
-    // Vérifier si l'utilisateur a déjà commenté cette vidéo
+    // Vérifier si l'utilisateur a déjà commenté
     _checkIfAlreadyCommented();
   }
 
-  // === NOUVEAU : Vérifier dans la BDD si l'utilisateur a déjà commenté ===
-  Future<void> _checkIfAlreadyCommented() async {
-    if (widget.promotionId == null) return;
-
-    try {
-      final hasComment = await _promotionService.hasComment(
-        widget.promotionId!,
-      );
-      if (mounted) {
-        setState(() {
-          _hasCommented = hasComment;
-        });
-      }
-    } catch (e) {
-      print("Erreur vérification commentaire: $e");
-    }
+  // Vérifier dans la BDD
+ Future<void> _checkIfAlreadyCommented() async {
+  if (widget.promotionId == null) {
+    if (mounted) setState(() => _isLoadingCommentStatus = false);
+    return;
   }
+
+  try {
+    print("⏳ Vérification commentaire pour Promo ID: ${widget.promotionId}...");
+    
+    final hasComment = await _promotionService.hasComment(widget.promotionId!);
+    
+    print("✅ Résultat reçu : $hasComment"); // Doit être true si déjà commenté
+
+    if (mounted) {
+      setState(() {
+        _hasCommented = hasComment;
+        _isLoadingCommentStatus = false;
+      });
+    }
+  } catch (e) {
+    print("❌ Erreur dans _checkIfAlreadyCommented: $e");
+    // En cas d'erreur, on laisse la boîte visible (false) ou on la cache par sécurité (true)
+    if (mounted) setState(() => _isLoadingCommentStatus = false);
+  }
+}
 
   @override
   void dispose() {
@@ -129,14 +142,16 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
     _startHideTimer();
   }
 
-  // === NOUVEAU : Envoyer un commentaire ===
-  Future<void> _sendComment() async {
+  // Envoyer un commentaire
+Future<void> _sendComment() async {
     final comment = _commentController.text.trim();
     if (comment.isEmpty || widget.promotionId == null) return;
 
     if (_wordCount > _maxWords) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Maximum $_maxWords mots autorisés'), backgroundColor: Colors.orange),
+        const SnackBar(
+            content: Text('Votre commentaire est trop long.'),
+            backgroundColor: Colors.orange),
       );
       return;
     }
@@ -145,35 +160,75 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
 
     try {
       await _promotionService.addComment(widget.promotionId!, comment);
-      
+
       _commentController.clear();
-      
+
       if (mounted) {
         setState(() {
-          _hasCommented = true; // CELA VA CACHER LA BOÎTE IMMÉDIATEMENT
+          _hasCommented = true; // On masque la barre immédiatement
         });
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Commentaire ajouté !'),
-            backgroundColor: AppColors.primary,
-          ),
+
+        // --- NOUVEAU : LE POPUP (DIALOG) ---
+        showDialog(
+          context: context,
+          barrierDismissible: false, // L'utilisateur doit cliquer sur OK
+          builder: (BuildContext ctx) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15)),
+              title: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green),
+                  SizedBox(width: 10),
+                  Text("Merci !"),
+                ],
+              ),
+              content: const Text(
+                "Votre commentaire a été envoyé avec succès.",
+                style: TextStyle(fontSize: 16),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop(); // Ferme le popup
+                  },
+                  child: const Text(
+                    "OK",
+                    style: TextStyle(
+                        color: AppColors.primary, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       }
     } catch (e) {
-      // Gestion des erreurs (ex: si le backend renvoie 403 car déjà commenté)
       if (mounted) {
-        // On vérifie si c'est une erreur "Déjà commenté" pour masquer la boite quand même
         if (e.toString().contains("403")) {
-           setState(() {
-             _hasCommented = true; 
-           });
-           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Vous avez déjà commenté cette vidéo.'), backgroundColor: Colors.orange),
+          // Cas où il a déjà commenté (doublon)
+          setState(() {
+            _hasCommented = true;
+          });
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text("Info"),
+              content: const Text("Vous avez déjà commenté cette promotion."),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text("OK"),
+                )
+              ],
+            ),
           );
         } else {
+          // Erreur technique
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Erreur lors de l\'envoi.'), backgroundColor: Colors.red),
+            const SnackBar(
+                content: Text('Erreur lors de l\'envoi.'),
+                backgroundColor: Colors.red),
           );
         }
       }
@@ -181,8 +236,6 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
       if (mounted) setState(() => _isSendingComment = false);
     }
   }
-
-  // === NOUVEAU : Bouton Suivre (Placeholder) ===
   void _onFollowTapped() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -363,18 +416,18 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                     backgroundColor: Colors.grey[700],
                     backgroundImage:
                         widget.promoterAvatar != null &&
-                            widget.promoterAvatar!.isNotEmpty
-                        ? NetworkImage(widget.promoterAvatar!)
-                        : null,
+                                widget.promoterAvatar!.isNotEmpty
+                            ? NetworkImage(widget.promoterAvatar!)
+                            : null,
                     child:
                         widget.promoterAvatar == null ||
-                            widget.promoterAvatar!.isEmpty
-                        ? const Icon(
-                            Icons.person,
-                            color: Colors.white,
-                            size: 20,
-                          )
-                        : null,
+                                widget.promoterAvatar!.isEmpty
+                            ? const Icon(
+                                Icons.person,
+                                color: Colors.white,
+                                size: 20,
+                              )
+                            : null,
                   ),
                   const SizedBox(width: 10),
 
@@ -420,7 +473,10 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
             ),
 
             // === BARRE DE COMMENTAIRE STYLE FACEBOOK ===
-            if (widget.promotionId != null && !_hasCommented)
+            // On affiche seulement si l'ID promo existe,
+            // que le chargement du statut est terminé,
+            // et que l'utilisateur n'a pas encore commenté.
+            if (widget.promotionId != null && !_isLoadingCommentStatus && !_hasCommented)
               Container(
                 color: const Color(0xFF2C2C2E),
                 padding: const EdgeInsets.symmetric(
@@ -480,14 +536,14 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                             : IconButton(
                                 onPressed:
                                     _commentController.text.trim().isNotEmpty
-                                    ? _sendComment
-                                    : null,
+                                        ? _sendComment
+                                        : null,
                                 icon: Icon(
                                   Icons.send_rounded,
                                   color:
                                       _commentController.text.trim().isNotEmpty
-                                      ? AppColors.primary
-                                      : Colors.grey[600],
+                                          ? AppColors.primary
+                                          : Colors.grey[600],
                                 ),
                               ),
                       ],
@@ -509,6 +565,19 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                   ],
                 ),
               ),
+
+             // Optionnel : Message discret si déjà commenté
+             if (widget.promotionId != null && !_isLoadingCommentStatus && _hasCommented)
+               Container(
+                 width: double.infinity,
+                 padding: const EdgeInsets.symmetric(vertical: 12),
+                 color: const Color(0xFF1C1C1E),
+                 child: const Text(
+                   "Vous avez déjà commenté cette promotion.",
+                   style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic, fontSize: 12),
+                   textAlign: TextAlign.center,
+                 ),
+               ),
           ],
         ),
       ),
