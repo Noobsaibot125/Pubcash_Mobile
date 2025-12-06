@@ -5,6 +5,7 @@ import '../utils/colors.dart';
 import '../utils/api_constants.dart'; // 👈 IMPORT IMPORTANT
 import 'simple_video_player.dart';
 import 'gains/transaction_details_screen.dart';
+
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({Key? key}) : super(key: key);
 
@@ -21,7 +22,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   // ✅ CORRECTION : On utilise la constante de production définie dans ApiConstants
   // Cela vaut "https://pub-cash.com"
-  final String _baseUrl = ApiConstants.socketUrl; 
+  final String _baseUrl = ApiConstants.socketUrl;
 
   @override
   void initState() {
@@ -31,14 +32,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _chargerNotifications({bool reload = false}) async {
     if (reload) {
-      if(mounted) setState(() {
-        _currentPage = 1;
-        _notifications = [];
-        _hasMore = true;
-      });
+      if (mounted)
+        setState(() {
+          _currentPage = 1;
+          _notifications = [];
+          _hasMore = true;
+        });
     }
 
-    if(mounted) setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
 
     try {
       final nouvelles = await _notificationService.recupererNotifications(
@@ -75,15 +77,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   // --- GESTION DU CLIC ---
   Future<void> _handleNotificationClick(AppNotification notif) async {
     if (!notif.lu) {
-       _notificationService.marquerCommeLue(notif.id); 
-       setState(() {}); 
+      _notificationService.marquerCommeLue(notif.id);
+      setState(() {});
     }
 
     print("Clic Notification Type: ${notif.type}");
 
     // 1. CAS RETRAIT (Nouveau) -> TransactionDetailsScreen
     if (notif.type.contains('retrait')) {
-      
       // On prépare les données pour l'écran de détails
       // On essaie de récupérer le statut depuis les données, sinon on le déduit du type
       String statut = notif.donnees?['statut'] ?? 'en_cours';
@@ -93,19 +94,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       final Map<String, dynamic> transactionData = {
         'montant': notif.donnees?['montant'] ?? '0',
         'statut': statut,
-        'date': notif.dateCreation.toIso8601String(), // On utilise la date de la notif
-        'operator': notif.donnees?['operator'] ?? notif.donnees?['operateur'] ?? 'Mobile',
+        'date': notif.dateCreation
+            .toIso8601String(), // On utilise la date de la notif
+        'operator':
+            notif.donnees?['operator'] ??
+            notif.donnees?['operateur'] ??
+            'Mobile',
         'transaction_id': notif.donnees?['transaction_id'] ?? 'N/A',
-        'numero_telephone': notif.donnees?['numero_telephone'] ?? 'Non spécifié',
+        'numero_telephone':
+            notif.donnees?['numero_telephone'] ?? 'Non spécifié',
       };
 
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => TransactionDetailsScreen(transaction: transactionData),
+          builder: (context) =>
+              TransactionDetailsScreen(transaction: transactionData),
         ),
       );
-      return; 
+      return;
     }
 
     // 2. CAS NOUVELLE VIDÉO -> Accueil
@@ -120,13 +127,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       String titre = notif.donnees?['titre'] ?? 'Gain validé';
 
       if (videoUrl != null && videoUrl.isNotEmpty) {
-        
         if (!videoUrl.startsWith('http')) {
-           if (videoUrl.startsWith('/')) videoUrl = videoUrl.substring(1);
-           videoUrl = "$_baseUrl/$videoUrl";
+          if (videoUrl.startsWith('/')) videoUrl = videoUrl.substring(1);
+          videoUrl = "$_baseUrl/$videoUrl";
         }
 
         print("Lecture vidéo prod : $videoUrl");
+
+        // Extraction des infos promoteur si disponibles
+        int? promoterId;
+        if (notif.donnees?['client_id'] != null)
+          promoterId = int.tryParse(notif.donnees!['client_id'].toString());
+        if (promoterId == null && notif.donnees?['promoter_id'] != null)
+          promoterId = int.tryParse(notif.donnees!['promoter_id'].toString());
+
+        String? promoterName = notif.donnees?['promoter_name'];
+        String? promoterAvatar = notif.donnees?['promoter_avatar'];
+        int? promotionId;
+        if (notif.donnees?['promotion_id'] != null)
+          promotionId = int.tryParse(notif.donnees!['promotion_id'].toString());
+        if (promotionId == null && notif.donnees?['id'] != null)
+          promotionId = int.tryParse(notif.donnees!['id'].toString());
 
         Navigator.push(
           context,
@@ -134,6 +155,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             builder: (context) => SimpleVideoPlayer(
               videoUrl: videoUrl!,
               title: titre,
+              promoterId: promoterId,
+              promoterName: promoterName,
+              promoterAvatar: promoterAvatar,
+              promotionId: promotionId,
             ),
           ),
         );
@@ -157,7 +182,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Notifications", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 20)),
+        title: const Text(
+          "Notifications",
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
         centerTitle: false,
         backgroundColor: Colors.white,
         elevation: 0,
@@ -166,32 +198,51 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-           Padding(
-             padding: const EdgeInsets.only(right: 16.0),
-             child: IconButton(
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: IconButton(
               icon: const Icon(Icons.done_all, color: AppColors.primary),
               onPressed: () async {
                 await _notificationService.marquerToutesCommeLues();
                 _chargerNotifications(reload: true);
               },
             ),
-           )
+          ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: () => _chargerNotifications(reload: true),
         color: AppColors.primary,
         child: _notifications.isEmpty && !_isLoading
-            ? Center(child: Text("Aucune notification", style: TextStyle(color: Colors.grey[500])))
+            ? Center(
+                child: Text(
+                  "Aucune notification",
+                  style: TextStyle(color: Colors.grey[500]),
+                ),
+              )
             : ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 itemCount: _notifications.length + (_hasMore ? 1 : 0),
-                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   if (index == _notifications.length) {
                     return _isLoading
-                        ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                        : TextButton(onPressed: () { _currentPage++; _chargerNotifications(); }, child: const Text("Voir plus"));
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
+                          )
+                        : TextButton(
+                            onPressed: () {
+                              _currentPage++;
+                              _chargerNotifications();
+                            },
+                            child: const Text("Voir plus"),
+                          );
                   }
                   return _buildNotificationCard(_notifications[index]);
                 },
@@ -201,11 +252,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildNotificationCard(AppNotification notif) {
-    bool hasThumbnail = (notif.type == 'video_regardee' || 
-                         notif.type == 'nouvelle_video' || 
-                         notif.type == 'felicitations') &&
-                         notif.donnees != null && 
-                         notif.donnees!['thumbnail_url'] != null;
+    bool hasThumbnail =
+        (notif.type == 'video_regardee' ||
+            notif.type == 'nouvelle_video' ||
+            notif.type == 'felicitations') &&
+        notif.donnees != null &&
+        notif.donnees!['thumbnail_url'] != null;
 
     return GestureDetector(
       onTap: () => _handleNotificationClick(notif),
@@ -216,7 +268,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.grey.shade100),
           boxShadow: [
-            BoxShadow(color: Colors.grey.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2)),
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
           ],
         ),
         child: Row(
@@ -255,7 +311,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             if (hasThumbnail)
               _buildThumbnail(notif)
             else if (notif.montantFormate != null)
-              _buildAmountBadge(notif.montantFormate!)
+              _buildAmountBadge(notif.montantFormate!),
           ],
         ),
       ),
@@ -264,54 +320,74 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Widget _buildLeadingIcon(AppNotification notif) {
     if (notif.type.contains('retrait') && notif.donnees != null) {
-      var rawOp = notif.donnees!['operator'] ?? 
-                  notif.donnees!['operateur'] ?? 
-                  notif.donnees!['operateur_mobile'];
-      
+      var rawOp =
+          notif.donnees!['operator'] ??
+          notif.donnees!['operateur'] ??
+          notif.donnees!['operateur_mobile'];
+
       String asset = 'assets/images/logo.png';
       if (rawOp != null) {
         String op = rawOp.toString().toLowerCase().trim();
-        if (op.contains('orange')) asset = 'assets/images/Orange.png';
-        else if (op.contains('mtn')) asset = 'assets/images/MTN.png';
-        else if (op.contains('moov')) asset = 'assets/images/Moov.png';
-        else if (op.contains('wave')) asset = 'assets/images/Wave.png';
+        if (op.contains('orange'))
+          asset = 'assets/images/Orange.png';
+        else if (op.contains('mtn'))
+          asset = 'assets/images/MTN.png';
+        else if (op.contains('moov'))
+          asset = 'assets/images/Moov.png';
+        else if (op.contains('wave'))
+          asset = 'assets/images/Wave.png';
       }
       return _buildAssetIcon(asset);
     }
 
     if (notif.type == 'roue_fortune' || notif.type.contains('jeu')) {
       return Container(
-        width: 48, height: 48,
-        decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFFFF8E1)),
+        width: 48,
+        height: 48,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Color(0xFFFFF8E1),
+        ),
         padding: const EdgeInsets.all(6),
         child: Image.asset('assets/images/Wheel.png', fit: BoxFit.contain),
       );
     }
 
     if (notif.type == 'video_regardee' || notif.type == 'felicitations') {
-       return _buildIconContainer(const Icon(Icons.check_circle, color: Colors.green, size: 26), Colors.green.withOpacity(0.1));
+      return _buildIconContainer(
+        const Icon(Icons.check_circle, color: Colors.green, size: 26),
+        Colors.green.withOpacity(0.1),
+      );
     }
     if (notif.type == 'nouvelle_video') {
-       return _buildIconContainer(const Icon(Icons.play_circle_fill, color: Colors.orange, size: 26), Colors.orange.withOpacity(0.1));
+      return _buildIconContainer(
+        const Icon(Icons.play_circle_fill, color: Colors.orange, size: 26),
+        Colors.orange.withOpacity(0.1),
+      );
     }
 
-    return _buildIconContainer(const Icon(Icons.notifications, color: Colors.grey), Colors.grey.withOpacity(0.1));
+    return _buildIconContainer(
+      const Icon(Icons.notifications, color: Colors.grey),
+      Colors.grey.withOpacity(0.1),
+    );
   }
 
   Widget _buildAssetIcon(String path) {
     return Container(
-      width: 48, height: 48,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         image: DecorationImage(image: AssetImage(path), fit: BoxFit.cover),
-        border: Border.all(color: Colors.grey.shade200)
+        border: Border.all(color: Colors.grey.shade200),
       ),
     );
   }
 
   Widget _buildIconContainer(Widget child, Color bg) {
     return Container(
-      width: 48, height: 48,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(shape: BoxShape.circle, color: bg),
       child: child,
     );
@@ -327,15 +403,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: Container(
-            width: 80, height: 45, color: Colors.black12,
-            child: Image.network(thumbUrl, fit: BoxFit.cover, errorBuilder: (c, o, s) => const Icon(Icons.broken_image, size: 20, color: Colors.grey)),
+            width: 80,
+            height: 45,
+            color: Colors.black12,
+            child: Image.network(
+              thumbUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (c, o, s) =>
+                  const Icon(Icons.broken_image, size: 20, color: Colors.grey),
+            ),
           ),
         ),
         Container(
-          width: 20, height: 20,
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.8), shape: BoxShape.circle),
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.8),
+            shape: BoxShape.circle,
+          ),
           child: const Icon(Icons.play_arrow, size: 14, color: Colors.black),
-        )
+        ),
       ],
     );
   }
@@ -343,8 +430,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget _buildAmountBadge(String amount) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(4)),
-      child: Text(amount, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        amount,
+        style: const TextStyle(
+          color: Colors.green,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 }

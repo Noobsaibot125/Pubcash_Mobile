@@ -156,21 +156,22 @@ void dispose() {
         builder: (context) => FullScreenVideoScreen(
           promotion: promo,
           onVideoViewed: () {
-             // 1. D'abord on supprime VISUELLEMENT la vidéo de la liste immédiatement
-             setState(() {
-               _promotions.removeWhere((p) => p.id == promo.id);
-               // Mise à jour du compteur pour le parent
-               widget.onVideoCountChanged?.call(_promotions.length);
-             });
-
-             // 2. Ensuite on recharge les données (pour récupérer le solde à jour, etc.)
-             // Si c'était une fraude, la vidéo ne reviendra pas car on l'a supprimée de la vue courante
-             // ou on peut éviter le _loadData() si on veut être sûr qu'elle ne revienne pas avant le prochain restart.
-             _loadData(); 
+            // Suppression visuelle immédiate (Optimistic UI)
+            if (mounted) {
+              setState(() {
+                _promotions.removeWhere((p) => p.id == promo.id);
+                widget.onVideoCountChanged?.call(_promotions.length);
+              });
+            }
           },
         ),
       ),
-    );
+    ).then((result) {
+      // --- CORRECTION ICI ---
+      // On recharge TOUJOURS les données au retour pour mettre à jour le solde (50 FCFA) et les points (5pts)
+      print("Retour sur Home - Actualisation des données...");
+      _loadData(); 
+    });
   }
 
 String? _getProfileImageUrl(String? photoUrl) {

@@ -4,15 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:provider/provider.dart';
-import '../models/promotion.dart';
-import '../services/promotion_service.dart';
 import 'package:dio/dio.dart'; 
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
+
+import '../models/promotion.dart';
+import '../services/promotion_service.dart';
 import '../services/auth_service.dart';
 import '../utils/colors.dart';
 import '../widgets/quiz_dialog.dart';
-import 'package:flutter/services.dart';
 
+// 1. AJOUT DU MIXIN WidgetsBindingObserver
 class FullScreenVideoScreen extends StatefulWidget {
   final Promotion promotion;
   final VoidCallback onVideoViewed;
@@ -27,23 +29,31 @@ class FullScreenVideoScreen extends StatefulWidget {
   State<FullScreenVideoScreen> createState() => _FullScreenVideoScreenState();
 }
 
-class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
+class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> with WidgetsBindingObserver {
   late VideoPlayerController _controller;
   final PromotionService _promotionService = PromotionService();
   
   bool _isInitialized = false;
   bool _videoEnded = false;
   bool _hasLiked = false;
-  bool _hasShared = false;
+  bool _hasShared = false; // C'est l'indicateur visuel
   
   bool _isCancelling = false; 
-  bool _isSharingLoading = false; // Pour l'état de chargement du bouton partager
+  bool _isSharingLoading = false;
+  
+  // 2. NOUVEAU FLAG : Pour savoir si on attend le retour de WhatsApp
+  bool _waitingForShareReturn = false; 
+  // Pour éviter de valider deux fois (via le await et via l'observer)
+  bool _isValidatingShare = false;
+
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    // Cache la barre de statut pour l'immersion
+    // 3. ON ECOUTE LE CYCLE DE VIE DE L'APP
+    WidgetsBinding.instance.addObserver(this); 
+
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.promotion.urlVideo))
@@ -60,9 +70,39 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
     _controller.addListener(_checkVideoEnd);
   }
 
+  @override
+  void dispose() {
+    // 4. ON ARRETE D'ECOUTER
+    WidgetsBinding.instance.removeObserver(this);
+
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ));
+
+    _controller.removeListener(_checkVideoEnd);
+    _controller.dispose();
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  // 5. DETECTE QUAND L'UTILISATEUR REVIENT SUR L'APP
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // L'utilisateur vient de revenir (ex: de WhatsApp)
+      if (_waitingForShareReturn) {
+        print("🔄 Retour détecté via Lifecycle Observer");
+        _onShareCompleted();
+      }
+    }
+  }
+
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      // Sécurité pour forcer la lecture si ça bloque
       if (_controller.value.isInitialized && !_controller.value.isPlaying && !_videoEnded) {
          _controller.play();
       }
@@ -71,6 +111,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
   }
 
   void _checkVideoEnd() {
+    if (!mounted) return;
     if (_controller.value.isInitialized && 
         !_controller.value.isPlaying && 
         _controller.value.position >= _controller.value.duration) {
@@ -84,25 +125,193 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
     }
   }
 
+  void _finishProcess() {
+    print("✅ Fermeture et retour accueil");
+    if (!mounted) return;
+    widget.onVideoViewed();
+    if (Navigator.canPop(context)) {
+      Navigator.of(context).pop(true); // Renvoie true pour recharger Home
+    }
+  }
+
   Future<void> _handleLike() async {
     try {
       await _promotionService.likePromotion(widget.promotion.id);
-      setState(() {
-        _hasLiked = true;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Vidéo likée ! Maintenant, partagez-la."), backgroundColor: Colors.green),
-      );
+      if (mounted) {
+        setState(() {
+          _hasLiked = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Vidéo likée ! Maintenant, partagez-la."), backgroundColor: Colors.green),
+        );
+      }
     } catch (e) {
       print("Erreur like: $e");
     }
   }
 
-  // === C'EST ICI QUE TOUT SE JOUE POUR LA DISPARITION ===
+  // 6. LA LOGIQUE DE VALIDATION ISOLEE
+  Future<void> _onShareCompleted() async {
+    // Sécurité anti-doublon
+    if (_isValidatingShare || _hasShared) return;
+    _isValidatingShare = true;
+    _waitingForShareReturn = false; // On n'attend plus
+
+    if (!mounted) return;
+
+    // Mise à jour UI immédiate
+    setState(() {
+      _hasShared = true;
+      // On garde _isSharingLoading true tant que l'API n'a pas répondu
+    });
+
+    try {
+      // 1. Enregistrement du partage
+      try {
+        await _promotionService.sharePromotion(widget.promotion.id);
+      } catch (e) {
+        print("Warning API share: $e");
+      }
+
+      // 2. Quiz ou Validation
+      if (widget.promotion.gameId != null && widget.promotion.gameType == 'quiz') {
+        setState(() => _isSharingLoading = false);
+        _showQuiz();
+      } else {
+        // Validation vue + Crédit points
+        await _promotionService.markPromotionAsViewed(widget.promotion.id);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(
+               content: Text("Félicitations ! Points crédités."), 
+               backgroundColor: Colors.green, 
+               duration: Duration(seconds: 2)
+             ),
+          );
+        }
+        
+        // Petit délai UX avant fermeture
+        await Future.delayed(const Duration(milliseconds: 800));
+        
+        if (mounted) _finishProcess();
+      }
+    } catch (e) {
+      setState(() => _isSharingLoading = false);
+      _isValidatingShare = false; // On permet de réessayer en cas d'erreur
+      
+      if (e.toString().contains("DEVICE_FRAUD")) {
+         _showFraudDialog();
+      } else {
+         print("Erreur technique validation: $e");
+         // En cas d'erreur obscure, on ferme quand même pour ne pas bloquer
+         _finishProcess();
+      }
+    }
+  }
+
+  Future<void> _handleShare() async {
+    if (_isSharingLoading) return;
+    setState(() => _isSharingLoading = true);
+
+    try {
+      final user = Provider.of<AuthService>(context, listen: false).currentUser;
+      final codeParrainage = user?.codeParrainage ?? '';
+      
+      final String shareUrl = "https://pub-cash.com/promo/${widget.promotion.id}?ref=$codeParrainage";
+      final String text = "Regarde ça et gagne de l'argent ! : ${widget.promotion.titre}\n$shareUrl";
+
+      final tempDir = await getTemporaryDirectory();
+      final savePath = '${tempDir.path}/video_${widget.promotion.id}.mp4';
+
+      if (!File(savePath).existsSync()) {
+        await Dio().download(widget.promotion.urlVideo, savePath);
+      }
+
+      if (!mounted) return;
+
+      // 7. ON ACTIVE LE MODE "ATTENTE DE RETOUR"
+      _waitingForShareReturn = true;
+
+      await Share.shareXFiles(
+        [XFile(savePath)],
+        text: text,
+        subject: widget.promotion.titre,
+      );
+
+      // 8. TENTATIVE DE VALIDATION DIRECTE (Si le téléphone est rapide)
+      // Si cette ligne s'exécute, _onShareCompleted gérera la suite.
+      // Si elle ne s'exécute pas (app pause), didChangeAppLifecycleState prendra le relais.
+      if (mounted) {
+         await _onShareCompleted();
+      }
+
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSharingLoading = false);
+      _waitingForShareReturn = false;
+      print("Erreur pré-partage: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Erreur lors du partage."), backgroundColor: Colors.orange),
+      );
+    }
+  }
+
+  void _showQuiz() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => QuizDialog(
+        promotion: widget.promotion,
+        onFinish: (isCorrect) async {
+          Navigator.of(ctx).pop(); 
+          await Future.delayed(const Duration(milliseconds: 300));
+          
+          if (!mounted) return;
+
+          if (isCorrect) {
+              try {
+                final success = await _promotionService.submitQuiz(
+                  widget.promotion.gameId!, 
+                  widget.promotion.bonneReponse!
+                );
+
+                if (!mounted) return;
+
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Bonne réponse ! Points crédités."), backgroundColor: Colors.green),
+                  );
+                }
+
+                await _promotionService.markPromotionAsViewed(widget.promotion.id);
+                await Future.delayed(const Duration(seconds: 1));
+                
+                if (mounted) _finishProcess();
+
+              } catch(e) {
+                 if (e.toString().contains("DEVICE_FRAUD")) {
+                    if (mounted) _showFraudDialog();
+                 } else {
+                    if (mounted) _finishProcess(); 
+                 }
+              }
+          } else {
+             ScaffoldMessenger.of(context).showSnackBar(
+               const SnackBar(content: Text("Mauvaise réponse..."), backgroundColor: Colors.red),
+             );
+             await Future.delayed(const Duration(seconds: 1));
+             if (mounted) _finishProcess();
+          }
+        },
+      ),
+    );
+  }
+
   void _showFraudDialog() {
     showDialog(
       context: context,
-      barrierDismissible: false, // Bloque la fermeture en cliquant à côté
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
@@ -118,19 +327,12 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
         actions: [
           TextButton(
             onPressed: () async {
-              // 1. Fermer le popup visuellement
               Navigator.of(ctx).pop(); 
-
-              // 2. AJOUT CAPITAL : On appelle cancelPromotion
-              // Cela marque la vidéo comme "annulée" dans la base de données.
-              // Comme ça, quand HomeScreen va recharger les données, le serveur ne renverra plus cette vidéo.
               try {
                 await _promotionService.cancelPromotion(widget.promotion.id);
               } catch (e) {
-                print("Erreur lors de l'annulation automatique: $e");
+                print("Erreur annulation auto: $e");
               }
-
-              // 3. Fermer l'écran et retirer de la liste locale
               if (mounted) _finishProcess(); 
             },
             child: const Text("Compris", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
@@ -140,174 +342,31 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
     );
   }
 
-  Future<void> _handleShare() async {
-    // 1. Afficher le chargement
-    setState(() => _isSharingLoading = true);
-
-    try {
-      final user = Provider.of<AuthService>(context, listen: false).currentUser;
-      final codeParrainage = user?.codeParrainage ?? '';
-      
-      final String shareUrl = "https://pub-cash.com/promo/${widget.promotion.id}?ref=$codeParrainage";
-      final String text = "Regarde ça et gagne de l'argent ! : ${widget.promotion.titre}\n$shareUrl";
-
-      // 2. Téléchargement
-      final tempDir = await getTemporaryDirectory();
-      final savePath = '${tempDir.path}/video_${widget.promotion.id}.mp4';
-
-      if (!File(savePath).existsSync()) {
-        await Dio().download(widget.promotion.urlVideo, savePath);
-      }
-
-      if (!mounted) return; 
-
-      // 3. Partage natif
-      await Share.shareXFiles(
-        [XFile(savePath)],
-        text: text,
-        subject: widget.promotion.titre,
-      );
-
-      // 4. Enregistrement du partage côté serveur
-      await _promotionService.sharePromotion(widget.promotion.id);
-      
-      if (!mounted) return;
-
-      setState(() {
-        _hasShared = true;
-        _isSharingLoading = false;
-      });
-
-      // 5. Suite logique (Quiz ou Validation directe)
-      if (widget.promotion.gameId != null && widget.promotion.gameType == 'quiz') {
-        _showQuiz();
-      } else {
-        // --- TENTATIVE DE VALIDATION DE LA VUE ---
-        try {
-          await _promotionService.markPromotionAsViewed(widget.promotion.id);
-          if (mounted) _finishProcess(); // Succès normal
-        } catch (e) {
-          // --- DETECTION DE FRAUDE (Code 403) ---
-          if (e.toString().contains("DEVICE_FRAUD")) {
-             if (mounted) _showFraudDialog(); // Affiche le popup
-          } else {
-             // Autre erreur (ex: pas d'internet)
-             print("Erreur inconnue validation vue: $e");
-          }
-        }
-      }
-
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isSharingLoading = false);
-      print("Erreur partage: $e");
-      
-      // On n'affiche le snackbar que si ce n'est pas l'erreur de fraude qu'on gère déjà
-      if (!e.toString().contains("DEVICE_FRAUD")) {
-         ScaffoldMessenger.of(context).showSnackBar(
-           const SnackBar(content: Text("Erreur ou annulation du partage."), backgroundColor: Colors.orange),
-         );
-      }
-    }
-  }
-
-  void _showQuiz() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => QuizDialog(
-        promotion: widget.promotion,
-        onFinish: (isCorrect) async {
-          Navigator.pop(ctx); // Ferme le quiz
-          
-          if (isCorrect) {
-             final success = await _promotionService.submitQuiz(
-               widget.promotion.gameId!, 
-               widget.promotion.bonneReponse!
-             );
-             if (success) {
-               ScaffoldMessenger.of(context).showSnackBar(
-                 const SnackBar(content: Text("Bonne réponse ! Points crédités."), backgroundColor: Colors.green),
-               );
-             }
-             
-             // Tentative de validation après le quiz
-             try {
-                await _promotionService.markPromotionAsViewed(widget.promotion.id);
-                _finishProcess();
-             } catch(e) {
-                if (e.toString().contains("DEVICE_FRAUD")) {
-                   _showFraudDialog(); // Affiche le popup même après un quiz réussi si fraude détectée
-                }
-             }
-          } else {
-             ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(content: Text("Mauvaise réponse..."), backgroundColor: Colors.red),
-             );
-             _finishProcess();
-          }
-        },
-      ),
-    );
-  }
-
-  // Cette fonction ferme l'écran et dit au parent (Home) de retirer la vidéo
-  void _finishProcess() {
-    widget.onVideoViewed(); // Déclenche le retrait dans HomeScreen
-    Navigator.pop(context); // Ferme l'écran vidéo
-  }
-
-  // Fonction appelée par la croix (annule la promo)
   Future<void> _handleClose() async {
     if (_videoEnded) {
-       Navigator.pop(context);
+       Navigator.pop(context); 
        return;
     }
 
     setState(() => _isCancelling = true);
+    try {
+      await _promotionService.cancelPromotion(widget.promotion.id);
+    } catch(e) {
+      print("Erreur cancel: $e");
+    }
     
-    // On annule (masque) la promo pour l'utilisateur
-    await _promotionService.cancelPromotion(widget.promotion.id);
-    
-    if (!mounted) return;
-    
-    // On retire aussi la vidéo de la liste
-    widget.onVideoViewed(); 
-    
-    Navigator.pop(context);
-  }
-
-  @override
-  void dispose() {
-    // 1. Restaurer le mode EdgeToEdge (comme dans ton main.dart)
-    // Au lieu de SystemUiMode.manual qui est l'ancien mode
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-
-    // 2. Restaurer le style des barres
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      // Barre du haut
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark, // Icones noires en haut
-      
-      // Barre du bas (Android)
-      systemNavigationBarColor: Colors.white, // Fond blanc
-      systemNavigationBarDividerColor: Colors.transparent,
-      systemNavigationBarIconBrightness: Brightness.dark, // Icones noires en bas
-      systemNavigationBarContrastEnforced: false,
-    ));
-
-    _controller.dispose();
-    _timer?.cancel();
-    super.dispose();
+    if (mounted) {
+      widget.onVideoViewed(); 
+      Navigator.pop(context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false, // Désactive le bouton retour physique
+      canPop: false,
       onPopInvoked: (didPop) {
         if (didPop) return;
-        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Veuillez terminer le visionnage avant de quitter."),
@@ -320,20 +379,18 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
         backgroundColor: Colors.black,
         body: Stack(
           children: [
-            // 1. Lecteur Vidéo
             Center(
               child: _isInitialized
                   ? AspectRatio(
                       aspectRatio: _controller.value.aspectRatio,
                       child: IgnorePointer( 
-                        ignoring: true, // Empêche de cliquer sur la vidéo pour pause
+                        ignoring: true, 
                         child: VideoPlayer(_controller),
                       ),
                     )
                   : const CircularProgressIndicator(color: AppColors.primary),
             ),
 
-            // 2. Overlay Fin de Vidéo
             if (_videoEnded)
               Container(
                 color: Colors.black.withOpacity(0.85),
@@ -350,7 +407,6 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
                     ),
                     const SizedBox(height: 40),
 
-                    // BOUTON LIKE
                     if (!_hasLiked)
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
@@ -363,14 +419,13 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
                         label: const Text("J'aime", style: TextStyle(color: Colors.white, fontSize: 18)),
                       ),
 
-                    // BOUTON PARTAGER (Apparaît après le Like)
                     if (_hasLiked && !_hasShared)
                       _isSharingLoading 
                       ? const Column(
                           children: [
                             CircularProgressIndicator(color: Colors.white),
                             SizedBox(height: 10),
-                            Text("Préparation du partage...", style: TextStyle(color: Colors.white70))
+                            Text("Validation en cours...", style: TextStyle(color: Colors.white70))
                           ],
                         )
                       : ElevatedButton.icon(
@@ -379,7 +434,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                         ),
-                        onPressed: _handleShare, // Appelle la fonction modifiée
+                        onPressed: _handleShare,
                         icon: const Icon(Icons.share, color: Colors.white),
                         label: const Text("Partager", style: TextStyle(color: Colors.white, fontSize: 18)),
                       ),
@@ -387,7 +442,6 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
                 ),
               ),
 
-            // 3. Bouton Fermer (Croix en haut à gauche)
             Positioned(
               top: 40,
               left: 20,
@@ -399,7 +453,6 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> {
                   ),
             ),
             
-            // 4. Indicateur de progression (barre en bas)
              if (_isInitialized && !_videoEnded)
               Positioned(
                 bottom: 30,

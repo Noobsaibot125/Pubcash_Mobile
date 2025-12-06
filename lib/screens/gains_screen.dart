@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../utils/api_constants.dart'; 
 import '../../services/auth_service.dart';
 import '../../services/promotion_service.dart';
 import '../../utils/colors.dart';
@@ -28,8 +29,9 @@ class _GainsScreenState extends State<GainsScreen> {
   String _gainFilter = 'tous'; 
 
   // IMPORTANT : Assure-toi que c'est la bonne IP ici aussi
-  final String _baseUrl = "http://192.168.1.15:5000"; 
+  // final String _baseUrl = "http://192.168.1.15:5000"; 
 
+ final String _baseUrl = ApiConstants.socketUrl;
   @override
   void initState() {
     super.initState();
@@ -77,15 +79,24 @@ class _GainsScreenState extends State<GainsScreen> {
          videoUrl = "$_baseUrl/uploads/videos/$videoUrl";
       }
 
-      Navigator.push(
+    Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => SimpleVideoPlayer(
             videoUrl: videoUrl!,
             title: titre,
             promotionId: videoData['id_promotion'] ?? videoData['id'],
-            promoterName: videoData['nom_promoteur'] ?? titre,
-            promoterAvatar: videoData['photo_promoteur'],
+            
+            // --- CORRECTION ICI ---
+            // On récupère l'ID du client (promoteur) pour le bouton Suivre
+            clientId: videoData['id_client'] ?? videoData['client_id'] ?? videoData['promoter_id'],
+            
+            // On récupère le nom
+            clientName: videoData['nom_promoteur'] ?? videoData['nom_entreprise'] ?? titre,
+            
+            // On récupère l'avatar
+            clientAvatar: videoData['photo_promoteur'] ?? videoData['profile_image_url'],
+            // ---------------------
           ),
         ),
       );

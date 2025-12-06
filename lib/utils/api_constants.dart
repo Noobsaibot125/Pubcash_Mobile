@@ -1,56 +1,80 @@
+import 'package:flutter/foundation.dart';
+
 class ApiConstants {
   // ==============================================================================
-  // 🌍 CONFIGURATION PRODUCTION (En Ligne)
+  // 🎛️ INTERRUPTEUR DE TEST
   // ==============================================================================
   
-  static const String baseUrl = 'https://pub-cash.com/api';
+  // METS CECI SUR 'true' POUR TRAVAILLER EN LOCAL
+  // METS CECI SUR 'false' POUR TESTER LA VERSION EN LIGNE (MÊME EN DEBUG)
+  static const bool useLocalInDebug = false; // (talse pour prod)
+//static const bool useLocalInDebug = true; // (true pour local)
+  // ==============================================================================
+  // ⚙️ CONFIGURATION DES URLS
+  // ==============================================================================
+
+  static const String _prodUrl = 'https://pub-cash.com/api';
+  static const String _prodSocketUrl = 'https://pub-cash.com';
+
+  static const String _localUrl = 'http://192.168.1.9:5000/api';
+  static const String _localSocketUrl = 'http://192.168.1.9:5000';
+
+  // Logique intelligente
+  static String get baseUrl {
+    // Si on est en Debug ET qu'on a activé l'interrupteur local
+    if (kDebugMode && useLocalInDebug) {
+      return _localUrl; 
+    } else {
+      // Sinon (Release OU interrupteur désactivé), on prend la Prod
+      return _prodUrl;
+    }
+  }
+
+  static String get socketUrl {
+    if (kDebugMode && useLocalInDebug) {
+      return _localSocketUrl;
+    } else {
+      return _prodSocketUrl;
+    }
+  }
+
+  // ==============================================================================
+  // 🛣️ ENDPOINTS
+  // ==============================================================================
   
-  // URL racine pour les images/vidéos (sans le /api à la fin)
-  static const String socketUrl = 'https://pub-cash.com'; 
+  static String get apiUrl => baseUrl;
 
-  static const String apiUrl = baseUrl;
-
-  // --- Endpoints Auth ---
+  // --- Le reste ne change pas ---
   static const String login = '/auth/utilisateur/login';
   static const String register = '/auth/utilisateur/register';
   static const String googleAuth = '/auth/google';
   static const String facebookAuth = '/auth/facebook';
   static const String refreshToken = '/auth/refresh-token';
 
-  // --- Endpoints User ---
   static const String userProfile = '/user/profile';
   static const String updateProfile = '/user/profile'; 
   static const String completeProfile = '/auth/utilisateur/complete-profile';
   static const String uploadProfileImage = '/user/upload-profile-image';
 
-  // --- Endpoints Data ---
   static const String villes = '/villes';
   static const String communes = '/communes';
 
-  // --- Endpoints Promotions/Videos ---
   static const String promotions = '/promotions';
   static const String userEarnings = '/promotions/utilisateur/gains';
-  
-  // ✅ CORRECTION : Le chemin correspond à ta route NodeJS :
-  // router.get('/utilisateur/historique-videos', ...)
   static const String userVideos = '/promotions/utilisateur/historique-videos'; 
 
-  // --- Endpoints Games ---
   static const String gamePoints = '/games/points';
   static const String gameWheel = '/games/wheel';
   static const String gameList = '/games/list';
   static const String gamePuzzleStart = '/games/puzzle/start';
   static const String gamePuzzleSubmit = '/games/puzzle/submit';
 
-  // --- Endpoints Notifications ---
   static const String notifications = '/notifications';
   static const String notificationsUnreadCount = '/notifications/non-lues/count';
-  // Note: ":id" sera remplacé dynamiquement dans le code Dart
   static const String notificationsMarkRead = '/notifications/:id/lire'; 
   static const String notificationsMarkAllRead = '/notifications/lire-toutes';
   static const String notificationsToken = '/notifications/token';
 
-  // --- Headers ---
   static const String authHeader = 'Authorization';
   static const String bearerPrefix = 'Bearer ';
 }

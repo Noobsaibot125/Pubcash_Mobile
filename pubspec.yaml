@@ -10,6 +10,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  
+  # --- Ajouts pour le Chat ---
+  emoji_picker_flutter: ^3.0.0 
+  # image_picker a été déplacé plus bas dans la section Média pour éviter le doublon
 
   # --- Librairies manquantes ajoutées ---
   dio: ^5.4.0
@@ -40,7 +44,7 @@ dependencies:
   chewie: ^1.8.1
   cached_network_image: ^3.3.1
   share_plus: ^7.2.2
-  image_picker: ^1.2.1
+  image_picker: ^1.0.7 # J'ai harmonisé la version, utilisez celle-ci ou ^1.2.1 selon vos besoins
   device_info_plus: ^9.0.3
   flutter_fortune_wheel: ^1.3.2
   rxdart: ^0.28.0

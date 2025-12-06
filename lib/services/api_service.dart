@@ -15,12 +15,15 @@ class ApiService {
   late final Dio _dio;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
-  // Constructeur privé
+ // Constructeur privé
   ApiService._internal() {
+    
+    // 👇 AJOUTE CETTE LIGNE POUR VÉRIFIER DANS LA CONSOLE 👇
+    print('🚨 [ApiService] Démarrage avec URL : ${ApiConstants.baseUrl}');
+
     _dio = Dio(
       BaseOptions(
-        // Assure-toi que ApiConstants.baseUrl est bien "http://192.168.1.15:5000/api"
-        baseUrl: ApiConstants.baseUrl, 
+        baseUrl: ApiConstants.baseUrl, // Il prendra la valeur dynamique
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
         headers: {

@@ -3,12 +3,14 @@ import 'dart:convert'; // Nécessaire pour jsonDecode
 class Promotion {
   final int id;
   final String titre;
+  final int idClient;
   final String? description;
   final String urlVideo;
   final String? thumbnailUrl;
   final int remunerationPack;
   final int duree;
-  
+  final String? clientName;   // Ajouté (nom_entreprise ou nom_utilisateur)
+  final String? clientAvatar; // Ajouté (profile_image_url)
   // Champs Quiz / Game
   final int? gameId;
   final String? gameType;
@@ -19,6 +21,7 @@ class Promotion {
 
   Promotion({
     required this.id,
+    required this.idClient,
     required this.titre,
     this.description,
     required this.urlVideo,
@@ -27,6 +30,8 @@ class Promotion {
     required this.duree,
     this.gameId,
     this.gameType,
+    this.clientName,   // Ajouté
+    this.clientAvatar, // Ajouté
     this.question,
     this.reponses,
     this.bonneReponse,
@@ -50,10 +55,13 @@ class Promotion {
 
     return Promotion(
       id: json['id'],
+      idClient: _safeInt(json['id_client']),
       titre: json['titre'] ?? '',
       description: json['description'],
       urlVideo: json['url_video'] ?? '',
       thumbnailUrl: json['thumbnail_url'],
+      clientName: json['nom_entreprise'] ?? json['nom_utilisateur'] ?? 'Utilisateur',
+      clientAvatar: json['profile_image_url'], // Assure-toi que c'est le bon nom de colonnefv
       remunerationPack: _safeInt(json['remuneration_pack']),
       duree: _safeInt(json['duree']),
       
