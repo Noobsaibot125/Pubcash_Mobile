@@ -131,6 +131,8 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen>
   void _finishProcess() {
     if (!mounted) return;
     widget.onVideoViewed();
+
+    // Modification pour forcer le retour à l'écran précédent (Home) de manière robuste
     if (Navigator.canPop(context)) {
       Navigator.of(context).pop(true);
     }
