@@ -47,10 +47,10 @@ class _GainsScreenState extends State<GainsScreen> {
       final earningsData = await _promotionService.getEarnings();
       final withdrawHistory = await _promotionService.getWithdrawHistory();
       
-      // On rÃ©cupÃ¨re l'historique complet
+      // On récupère l'historique complet
       final videoHistoryRaw = await _promotionService.getInteractionHistory();
       
-      // On garde les VUES (gains validÃ©s)
+      // On garde les VUES (gains validés)
       final videoGains = videoHistoryRaw.where((item) => item['type_interaction'] == 'vue').toList();
 
       if (mounted) {
@@ -370,7 +370,7 @@ class _GainsScreenState extends State<GainsScreen> {
                               children: [
                                 Text(item['titre'] ?? 'Promotion', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                                 const SizedBox(height: 4),
-                                Text("RegardÃ© le $dateDisplay", style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                                Text("Regardé le $dateDisplay", style: TextStyle(color: Colors.grey[500], fontSize: 11)),
                               ],
                             ),
                           ),
@@ -379,7 +379,7 @@ class _GainsScreenState extends State<GainsScreen> {
                             children: [
                               Text("+ $amount F", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
                               const SizedBox(height: 4),
-                              Text("ValidÃ©", style: TextStyle(color: Colors.green[700], fontSize: 10, fontWeight: FontWeight.w600)),
+                              Text("Validé", style: TextStyle(color: Colors.green[700], fontSize: 10, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ],
@@ -442,11 +442,11 @@ class _GainsScreenState extends State<GainsScreen> {
         IconData statusIcon = Icons.access_time;
         
         if (statusText == 'traite' || statusText == 'succes') {
-          statusText = "SuccÃ¨s";
+          statusText = "Succès";
           statusColor = Colors.green;
           statusIcon = Icons.check_circle;
         } else if (statusText == 'rejete' || statusText == 'echec') {
-          statusText = "Ã‰chouÃ©";
+          statusText = "échoué";
           statusColor = Colors.red;
           statusIcon = Icons.cancel;
         }
