@@ -13,6 +13,7 @@ import '../services/promotion_service.dart';
 import '../services/auth_service.dart';
 import '../utils/colors.dart';
 import '../widgets/quiz_dialog.dart';
+import 'main_navigation_screen.dart';
 
 // 1. AJOUT DU MIXIN WidgetsBindingObserver
 class FullScreenVideoScreen extends StatefulWidget {
@@ -129,8 +130,16 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> with Widg
     print("✅ Fermeture et retour accueil");
     if (!mounted) return;
     widget.onVideoViewed();
+
+    // Modification pour forcer le retour à l'écran précédent (Home) de manière robuste
     if (Navigator.canPop(context)) {
-      Navigator.of(context).pop(true); // Renvoie true pour recharger Home
+      Navigator.of(context).pop(true);
+    } else {
+       // Cas extrême : si on ne peut pas pop (ex: ouvert directement), on force un remplacement
+       // Cela nous ramène à l'écran principal de l'application
+       Navigator.of(context).pushReplacement(
+         MaterialPageRoute(builder: (_) => const MainNavigationScreen())
+       );
     }
   }
 
@@ -191,8 +200,8 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> with Widg
           );
         }
         
-        // Petit délai UX avant fermeture
-        await Future.delayed(const Duration(milliseconds: 800));
+        // Petit délai UX avant fermeture (réduit pour réactivité)
+        await Future.delayed(const Duration(milliseconds: 200));
         
         if (mounted) _finishProcess();
       }
@@ -265,12 +274,17 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> with Widg
         promotion: widget.promotion,
         onFinish: (isCorrect) async {
           Navigator.of(ctx).pop(); 
-          await Future.delayed(const Duration(milliseconds: 300));
+          // Suppression du délai de 300ms pour plus de fluidité
           
           if (!mounted) return;
 
           if (isCorrect) {
               try {
+                // On affiche un feedback immédiat
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Bonne réponse ! Validation..."), backgroundColor: Colors.green, duration: Duration(milliseconds: 1000)),
+                );
+
                 final success = await _promotionService.submitQuiz(
                   widget.promotion.gameId!, 
                   widget.promotion.bonneReponse!
@@ -278,14 +292,9 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> with Widg
 
                 if (!mounted) return;
 
-                if (success) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Bonne réponse ! Points crédités."), backgroundColor: Colors.green),
-                  );
-                }
-
                 await _promotionService.markPromotionAsViewed(widget.promotion.id);
-                await Future.delayed(const Duration(seconds: 1));
+                // On réduit le délai final
+                await Future.delayed(const Duration(milliseconds: 500));
                 
                 if (mounted) _finishProcess();
 
@@ -298,9 +307,9 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen> with Widg
               }
           } else {
              ScaffoldMessenger.of(context).showSnackBar(
-               const SnackBar(content: Text("Mauvaise réponse..."), backgroundColor: Colors.red),
+               const SnackBar(content: Text("Mauvaise réponse..."), backgroundColor: Colors.red, duration: Duration(seconds: 1)),
              );
-             await Future.delayed(const Duration(seconds: 1));
+             await Future.delayed(const Duration(milliseconds: 800));
              if (mounted) _finishProcess();
           }
         },
