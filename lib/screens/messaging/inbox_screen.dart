@@ -176,9 +176,10 @@ class _InboxScreenState extends State<InboxScreen> {
                 )
               : RefreshIndicator(
                   onRefresh: _loadConversations,
-                  child: ListView.separated(
+                  // MODIFICATION ICI : J'ai remplacé ListView.separated par ListView.builder
+                  // et j'ai retiré le separatorBuilder qui créait le trait.
+                  child: ListView.builder(
                     itemCount: _conversations.length,
-                    separatorBuilder: (ctx, i) => const Divider(height: 1),
                     itemBuilder: (ctx, i) {
                       final conv = _conversations[i];
                       final unreadCount = conv['unreadCount'] ?? 0;

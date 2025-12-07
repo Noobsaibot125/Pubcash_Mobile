@@ -191,12 +191,24 @@ class _GainsScreenState extends State<GainsScreen> {
                     const Text("Solde actuel", style: TextStyle(color: Colors.white70, fontSize: 13, letterSpacing: 1)),
                     const SizedBox(height: 8),
                     
-                    Row(
+                  Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          authService.showBalance ? "${_solde.toInt()} FCFA" : "â€¢â€¢â€¢â€¢â€¢â€¢",
-                          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                        // AJOUT DE FLEXIBLE et FITTEDBOX pour éviter l'erreur de dépassement
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              authService.showBalance 
+                                  ? "${_solde.toInt()} FCFA" 
+                                  : "••••••", // On met des points simples ici
+                              style: const TextStyle(
+                                color: Colors.white, 
+                                fontSize: 32, 
+                                fontWeight: FontWeight.bold
+                              ),
+                            ),
+                          ),
                         ),
                         const SizedBox(width: 10),
                         GestureDetector(

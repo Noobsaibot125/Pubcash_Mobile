@@ -111,40 +111,38 @@ void dispose() {
   super.dispose();
 }
 
-  Future<void> _loadData() async {
+ Future<void> _loadData() async {
     if (!mounted) return;
     setState(() => _loading = true);
     
     final authService = Provider.of<AuthService>(context, listen: false);
 
     try {
+      // 1. On force la mise à jour du profil (où se trouve le solde utilisateur global)
       await authService.refreshUserProfile();
       
-      final results = await Future.wait([
-        _promotionService.getPromotions(filter: _filter),
-        _promotionService.getEarnings(),
-        NotificationService().getUnreadCount() 
-      ]);
-
-      final promos = results[0] as List<Promotion>;
-      final earnings = results[1] as Map<String, dynamic>;
-      final unread = results[2] as int;
+      // 2. On récupère les gains détaillés
+      final earnings = await _promotionService.getEarnings();
       
+      // 3. On récupère les notifs
+      final unread = await NotificationService().getUnreadCount();
+      
+      // 4. On récupère la liste des vidéos
+      final promos = await _promotionService.getPromotions(filter: _filter);
+
       if (mounted) {
         setState(() {
           _promotions = promos;
           _earnings = earnings;
+          // On s'assure de prendre les points frais
           _points = authService.currentUser?.points ?? 0;
           _unreadCount = unread;
           _loading = false;
         });
-
-        // 👇 C'EST ICI QU'ON ENVOIE LE NOMBRE AU PARENT
-        // On le fait après le setState pour être sûr d'avoir la bonne longueur
         widget.onVideoCountChanged?.call(_promotions.length);
       }
     } catch (e) {
-      print("Erreur globale chargement home: $e");
+      print("Erreur reload home: $e");
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -156,7 +154,7 @@ void dispose() {
         builder: (context) => FullScreenVideoScreen(
           promotion: promo,
           onVideoViewed: () {
-            // Suppression visuelle immédiate (Optimistic UI)
+            // Optimistic UI : On l'enlève visuellement tout de suite
             if (mounted) {
               setState(() {
                 _promotions.removeWhere((p) => p.id == promo.id);
@@ -166,10 +164,21 @@ void dispose() {
           },
         ),
       ),
-    ).then((result) {
-      // --- CORRECTION ICI ---
-      // On recharge TOUJOURS les données au retour pour mettre à jour le solde (50 FCFA) et les points (5pts)
-      print("Retour sur Home - Actualisation des données...");
+    ).then((result) async {
+      // --- C'EST ICI QUE CA SE JOUE ---
+      // Si result == true, c'est que la vidéo a été validée avec succès.
+      if (result == true) {
+        print("✅ Vidéo validée, rechargement complet...");
+        
+        // Petit délai pour être sûr que la BDD est à jour côté serveur
+        // (parfois la transaction prend 100-200ms)
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        // On force la mise à jour du badge notification manuellement pour l'UX
+        NotificationService().refreshUnreadCount();
+      }
+      
+      // Dans tous les cas, on recharge les données (Solde, Points, Liste)
       _loadData(); 
     });
   }

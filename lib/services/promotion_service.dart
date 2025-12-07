@@ -142,22 +142,27 @@ class PromotionService {
     }
   }
 
-  Future<void> markPromotionAsViewed(int promoId) async {
+Future<int> markPromotionAsViewed(int promoId) async {
     try {
       String? deviceId = await DeviceUtils.getDeviceId();
 
-      await _apiService.post(
+      // On attend la réponse du serveur
+      final response = await _apiService.post(
         '${ApiConstants.promotions}/$promoId/view',
         data: {'device_id': deviceId},
       );
-      print("Vue validée avec succès pour l'appareil: $deviceId");
+      
+      print("Vue validée avec succès.");
+      
+      // On récupère le montant envoyé par le backend (étape 1)
+      // Si c'est null, on met 0 par sécurité
+      return response.data['montant'] ?? 0;
+
     } catch (e) {
       print("Erreur validation vue: $e");
 
-      // --- MODIFICATION ICI ---
       if (e is DioException) {
         if (e.response?.statusCode == 403) {
-          // On lance une erreur spécifique pour la fraude
           throw "DEVICE_FRAUD";
         }
       }

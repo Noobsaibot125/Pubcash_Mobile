@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -8,24 +9,25 @@ import 'package:pubcash_mobile/main.dart'; // Adapte selon le nom de ton projet
 import '../../services/notification_service.dart';
 
 class NotificationService {
- static final NotificationService _instance = NotificationService._internal();
+  static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
-  
+
   final ApiService _apiService = ApiService();
 
   bool _initialized = false;
 
   // Le flux pour la cloche (Badge)
-  final StreamController<int> _unreadCountController = StreamController<int>.broadcast();
+  final StreamController<int> _unreadCountController =
+      StreamController<int>.broadcast();
   Stream<int> get unreadCountStream => _unreadCountController.stream;
 
   /// Initialiser le service de notifications
-    Future<void> initialiser() async {
+  Future<void> initialiser() async {
     if (_initialized) return;
 
     try {
@@ -43,7 +45,7 @@ class NotificationService {
 
         // iOS Configuration
         await _fcm.setForegroundNotificationPresentationOptions(
-          alert: true, 
+          alert: true,
           badge: true,
           sound: true,
         );
@@ -59,7 +61,9 @@ class NotificationService {
 
         // Écoute PREMIER PLAN
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-          print("📡 Message reçu en premier plan : ${message.notification?.title}");
+          print(
+            "📡 Message reçu en premier plan : ${message.notification?.title}",
+          );
           _afficherNotificationLocale(message);
         });
 
@@ -82,30 +86,35 @@ class NotificationService {
   /// Configurer les notifications locales (affichage en premier plan)
   Future<void> _configurerNotificationsLocales() async {
     // ⚠️ CORRECTION ICI : On utilise launcher_icon car c'est le fichier qui existe
-    const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
-    
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/launcher_icon',
+    );
+
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
-    
+
     const initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     );
- await _localNotifications.initialize(
+    await _localNotifications.initialize(
       initSettings,
       // 👇👇👇 C'EST ICI LA MODIFICATION IMPORTANTE (Clic App Ouverte) 👇👇👇
       onDidReceiveNotificationResponse: (details) {
         print('🖱️ Clic sur notification locale (App ouverte)');
         // On utilise la clé globale pour aller à l'accueil
-        navigatorKey.currentState?.pushNamedAndRemoveUntil('/home', (route) => false);
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/home',
+          (route) => false,
+        );
       },
       // 👆👆👆 FIN MODIFICATION 👆👆👆
     );
 
-   const androidChannel = AndroidNotificationChannel(
+    const androidChannel = AndroidNotificationChannel(
       'pubcash_notifications_v3', // <--- PASSAGE EN V3 POUR FORCER LA MISE A JOUR
       'Notifications PubCash',
       description: 'Notifications pour les gains, retraits et nouvelles vidéos',
@@ -115,7 +124,8 @@ class NotificationService {
 
     await _localNotifications
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(androidChannel);
   }
 
@@ -123,23 +133,28 @@ class NotificationService {
   Future<void> _envoyerTokenAuBackend(String token) async {
     try {
       await _apiService.post('/notifications/token', data: {'token': token});
-    } catch (e) { print("ℹ️ Token non envoyé: $e"); }
+    } catch (e) {
+      print("ℹ️ Token non envoyé: $e");
+    }
   }
 
   Future<void> forceRefreshToken() async {
     try {
       if (!_initialized) await Firebase.initializeApp();
       final token = await _fcm.getToken();
-      if (token != null) await _apiService.post('/notifications/token', data: {'token': token});
-    } catch (e) { print("❌ Refresh token error: $e"); }
+      if (token != null)
+        await _apiService.post('/notifications/token', data: {'token': token});
+    } catch (e) {
+      print("❌ Refresh token error: $e");
+    }
   }
 
   /// Afficher une notification locale quand l'app est au premier plan
-  Future<void> _afficherNotificationLocale(RemoteMessage message) async {
+ Future<void> _afficherNotificationLocale(RemoteMessage message) async {
     await refreshUnreadCount();
 
     final notification = message.notification;
-    
+
     if (notification != null) {
       try {
         await _localNotifications.show(
@@ -148,15 +163,18 @@ class NotificationService {
           notification.body,
           const NotificationDetails(
             android: AndroidNotificationDetails(
-              'pubcash_notifications_v3', // <--- DOIT CORRESPONDRE AU V3
+              'pubcash_notifications_v3',
               'Notifications PubCash',
               channelDescription: 'Notifications importantes',
               importance: Importance.max,
               priority: Priority.high,
-              icon: '@mipmap/launcher_icon', // <--- UTILISATION DE LA BONNE ICONE
+              icon: '@mipmap/launcher_icon',
               playSound: true,
               enableVibration: true,
               visibility: NotificationVisibility.public,
+              
+              // 👇 AJOUT DE LA COULEUR ORANGE ICI 👇
+              color: Color(0xFFFF8C42), 
             ),
             iOS: DarwinNotificationDetails(
               presentAlert: true,
@@ -177,11 +195,40 @@ class NotificationService {
     print('Notification cliquée: ${message.data}');
     // Idéalement ici, on navigue vers l'écran concerné et on rafraichit le badge
     refreshUnreadCount();
-     Future.delayed(const Duration(milliseconds: 500), () {
-      navigatorKey.currentState?.pushNamedAndRemoveUntil('/home', (route) => false);
+    Future.delayed(const Duration(milliseconds: 500), () {
+      navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        '/home',
+        (route) => false,
+      );
     });
   }
+// === NOUVELLE FONCTION : Notification Locale Immédiate ===
+  Future<void> showInstantNotification(String title, String body) async {
+    const androidDetails = AndroidNotificationDetails(
+      'pubcash_notifications_v3',
+      'Notifications PubCash',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      icon: '@mipmap/launcher_icon',
+      color: Color(0xFFFF8C42), // Orange PubCash
+    );
 
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+    await _localNotifications.show(
+      DateTime.now().millisecond, // ID unique
+      title,
+      body,
+      details,
+    );
+  }
   /// Récupérer les notifications depuis l'API
   Future<List<AppNotification>> recupererNotifications({
     int page = 1,
@@ -194,11 +241,11 @@ class NotificationService {
 
       if (response.data['success'] == true) {
         final List notificationsJson = response.data['notifications'] ?? [];
-        
+
         // On profite de cet appel pour rafraîchir le compteur global
         // car l'API renvoie souvent le compteur avec la liste
         if (response.data['unreadCount'] != null) {
-           _unreadCountController.add(response.data['unreadCount']);
+          _unreadCountController.add(response.data['unreadCount']);
         }
 
         return notificationsJson
@@ -238,17 +285,17 @@ class NotificationService {
   Future<int> getUnreadCount() async {
     try {
       final response = await _apiService.get('/notifications/non-lues/count');
-      
+
       int count = 0;
       if (response.data is Map && response.data['success'] == true) {
         count = response.data['count'] ?? 0;
       } else if (response.data is Map && response.data['count'] != null) {
-         count = response.data['count'];
+        count = response.data['count'];
       }
-      
+
       // On pousse le nouveau chiffre dans le Stream
       _unreadCountController.add(count);
-      
+
       return count;
     } catch (e) {
       print('❌ Erreur comptage notifications: $e');
@@ -269,5 +316,42 @@ class NotificationService {
     } catch (e) {
       print('❌ Erreur suppression notification: $e');
     }
+  }
+
+  /// Afficher une notification locale manuelle (Public)
+  Future<void> showLocalNotification({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    const androidDetails = AndroidNotificationDetails(
+      'pubcash_notifications_v3',
+      'Notifications PubCash',
+      channelDescription: 'Notifications importantes',
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: '@mipmap/launcher_icon',
+      playSound: true,
+      enableVibration: true,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _localNotifications.show(
+      DateTime.now().millisecond, // ID unique
+      title,
+      body,
+      details,
+      payload: payload,
+    );
   }
 }
