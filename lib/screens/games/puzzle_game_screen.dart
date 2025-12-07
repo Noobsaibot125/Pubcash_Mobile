@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/game.dart';
 import '../../services/game_service.dart';
 import '../../utils/colors.dart';
-
+import '../../services/notification_service.dart';
 class PuzzleGameScreen extends StatefulWidget {
   final Game game;
   const PuzzleGameScreen({super.key, required this.game});
@@ -65,14 +65,29 @@ class _PuzzleGameScreenState extends State<PuzzleGameScreen> {
     });
   }
 
-  void _endGame({required bool success}) async {
+ void _endGame({required bool success}) async {
     _timer?.cancel();
     setState(() { _isPlaying = false; _isGameOver = true; });
 
     if (success) {
+      // Afficher un petit chargement si tu veux, ou laisser tel quel
       try {
         final result = await _gameService.submitPuzzle(widget.game.id);
-        if (mounted) _showResultDialog(true, result['points'] ?? 0);
+        
+        if (mounted) {
+          // 1. DÉCLENCHEMENT MANUEL DE LA NOTIFICATION (Pour que ça sonne tout de suite)
+          NotificationService().showInstantNotification(
+            "Puzzle Terminé ! 🧩",
+            "Bravo ! Vous avez gagné ${result['points'] ?? 0} points.",
+          );
+
+          // 2. MISE À JOUR DU BADGE (La cloche rouge)
+          // On demande au service de vérifier le nouveau nombre de notifs non lues
+          NotificationService().refreshUnreadCount();
+
+          // 3. AFFICHAGE DU POPUP
+          _showResultDialog(true, result['points'] ?? 0);
+        }
       } catch (e) {
         if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur validation: $e")));
       }

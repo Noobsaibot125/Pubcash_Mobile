@@ -480,7 +480,7 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                             ),
                             child: TextField(
                               controller: _commentController,
-                              style: const TextStyle(color: Colors.white, fontSize: 14),
+                              style: const TextStyle(color: Color.fromARGB(255, 8, 8, 8), fontSize: 14),
                               maxLines: 2,
                               minLines: 1,
                               decoration: InputDecoration(

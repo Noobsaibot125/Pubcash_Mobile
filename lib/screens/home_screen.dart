@@ -194,7 +194,7 @@ String? _getProfileImageUrl(String? photoUrl) {
     const String baseUrl = "http://192.168.1.15:5000"; 
     return "$baseUrl/uploads/profile/$photoUrl";
 }
-  @override
+@override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
     final user = authService.currentUser;
@@ -210,38 +210,69 @@ String? _getProfileImageUrl(String? photoUrl) {
             slivers: [
               // === APP BAR ===
               SliverAppBar(
-                toolbarHeight: 70,
+                toolbarHeight: 80,
                 floating: true,
                 backgroundColor: Colors.white,
-                elevation: 2,
-                shadowColor: Colors.black.withOpacity(0.1),
+                elevation: 0,
+                shadowColor: Colors.black.withOpacity(0.05),
+                
+                centerTitle: false,
+                // 👇 ASTUCE ICI : On réduit la marge gauche (était à 20)
+                // Cela permet au logo de grandir vers la gauche sans pousser le texte à droite
+                titleSpacing: 5, 
+                
                 title: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Image.asset(
-                      'assets/images/logo.png',
-                      height: 60, 
-                      width: 60,
-                      fit: BoxFit.contain,
-                      errorBuilder: (c, o, s) => const Icon(Icons.broken_image, color: Colors.grey),
+                    // 👇 1. LOGO BIEN GRAND
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8.0), // Petite marge interne
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        height: 55, // Agrandit à 55 (au lieu de 40)
+                        width: 55,
+                        fit: BoxFit.contain,
+                        errorBuilder: (c, o, s) => const Icon(Icons.broken_image, color: Colors.grey),
+                      ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
+                    
+                    // 👇 2. TEXTE (AVEC BONJOUR)
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('PubCash', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold, fontSize: 20)),
+                        const Text(
+                          'PubCash', 
+                          style: TextStyle(
+                            color: AppColors.textDark,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 20, // Taille équilibrée
+                            height: 1.0,
+                          )
+                        ),
                         if (user != null)
-                          Text("Bonjour, ${user.nomUtilisateur}", style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                          Text(
+                            "Bonjour, ${user.nomUtilisateur}", 
+                            style: const TextStyle(
+                              color: AppColors.textMuted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              height: 1.2
+                            )
+                          ),
                       ],
                     ),
                   ],
                 ),
+                
                 actions: [
                   // --- NOTIFICATIONS ---
                   Stack(
                     alignment: Alignment.center,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.notifications_outlined, color: AppColors.textDark),
+                        icon: const Icon(Icons.notifications_outlined, color: Colors.black87, size: 28),
                         onPressed: () {
                           Navigator.push(
                             context,
@@ -251,12 +282,16 @@ String? _getProfileImageUrl(String? photoUrl) {
                       ),
                       if (_unreadCount > 0)
                         Positioned(
-                          right: 8,
-                          top: 8,
+                          right: 10,
+                          top: 10,
                           child: Container(
                             padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFF6B35), 
+                              shape: BoxShape.circle,
+                              border: Border.fromBorderSide(BorderSide(color: Colors.white, width: 1.5))
+                            ),
+                            constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
                             child: Text(
                               '$_unreadCount',
                               style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
@@ -267,16 +302,13 @@ String? _getProfileImageUrl(String? photoUrl) {
                     ],
                   ),
 
-                 // --- PROFIL UTILISATEUR ---
+                  // --- PROFIL UTILISATEUR ---
                   GestureDetector(
                     onTap: () {
-                      // 👇 MODIFICATION : On utilise le callback pour changer d'onglet
-                      // au lieu de faire Navigator.push
                       if (widget.goToProfile != null) {
                         widget.goToProfile!();
                       } else {
-                         // Fallback si jamais on n'a pas le callback (cas rare)
-                         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
                       }
                     },
                     child: Padding(
@@ -287,11 +319,11 @@ String? _getProfileImageUrl(String? photoUrl) {
                           border: Border.all(color: Colors.orange, width: 2),
                         ),
                         child: CircleAvatar(
-                          radius: 18,
+                          radius: 20,
                           backgroundColor: Colors.grey[200],
                           backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
                           child: photoUrl == null 
-                              ? const Icon(Icons.person, color: Colors.grey, size: 20) 
+                              ? const Icon(Icons.person, color: Colors.grey, size: 24) 
                               : null,
                         ),
                       ),

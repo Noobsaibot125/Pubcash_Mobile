@@ -5,7 +5,7 @@ import '../utils/colors.dart';
 import '../utils/api_constants.dart'; // 👈 IMPORT IMPORTANT
 import 'simple_video_player.dart';
 import 'gains/transaction_details_screen.dart';
-
+import 'messaging/chat_screen.dart';
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({Key? key}) : super(key: key);
 
@@ -82,7 +82,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     print("Clic Notification Type: ${notif.type}");
-
+// --- AJOUT : GESTION DU CLIC SUR UN MESSAGE ---
+    if (notif.type == 'nouveau_message') {
+      if (notif.donnees != null && notif.donnees!['sender_id'] != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              contactId: int.parse(notif.donnees!['sender_id'].toString()),
+              contactType: notif.donnees!['sender_type'] ?? 'client',
+              // On utilise le titre de la notif comme nom par défaut ou on cherche dans les données
+              contactName: notif.donnees?['sender_name'] ?? notif.titre.replaceAll('Nouveau message', '').trim(), 
+              contactPhoto: notif.donnees?['sender_photo'],
+            ),
+          ),
+        );
+      }
+      return;
+    }
     // 1. CAS RETRAIT (Nouveau) -> TransactionDetailsScreen
     if (notif.type.contains('retrait')) {
       // On prépare les données pour l'écran de détails
@@ -170,9 +187,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  String _getValidImageUrl(String path, String folder) {
+ String _getValidImageUrl(String path, String folder) {
     if (path.isEmpty) return "";
     if (path.startsWith('http')) return path;
+    
+    // Si le chemin contient déjà 'uploads', on ne rajoute pas le dossier
+    if (path.contains('uploads/')) {
+        // On s'assure juste qu'il n'y a pas de double slash au début
+        if (path.startsWith('/')) return "$_baseUrl$path";
+        return "$_baseUrl/$path";
+    }
+
+    // Sinon, comportement standard
     if (path.startsWith('/')) path = path.substring(1);
     return "$_baseUrl/uploads/$folder/$path";
   }
@@ -319,6 +345,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildLeadingIcon(AppNotification notif) {
+    if (notif.type == 'nouveau_message') {
+      // On récupère le chemin de la photo envoyé par le backend
+      String? photoPath = notif.donnees?['sender_photo'];
+
+      if (photoPath != null && photoPath.isNotEmpty) {
+        // On construit l'URL complète en utilisant ton helper existant
+        // On suppose que les photos de profil sont dans le dossier 'profile'
+        String fullUrl = _getValidImageUrl(photoPath, "profile");
+
+        return Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.grey.shade200),
+            image: DecorationImage(
+              image: NetworkImage(fullUrl),
+              fit: BoxFit.cover,
+              onError: (exception, stackTrace) {
+                // Gestion d'erreur silencieuse si l'image ne charge pas
+              }
+            ),
+          ),
+        );
+      } else {
+        // Si pas de photo, on affiche une icône de personne colorée
+        return _buildIconContainer(
+          const Icon(Icons.person, color: AppColors.primary, size: 26),
+          AppColors.primary.withOpacity(0.1),
+        );
+      }
+    }
     if (notif.type.contains('retrait') && notif.donnees != null) {
       var rawOp =
           notif.donnees!['operator'] ??

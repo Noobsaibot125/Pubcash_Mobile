@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 // Remonte de 2 niveaux pour trouver services et widgets
 import '../../services/auth_service.dart';
+import 'package:flutter/services.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/custom_button.dart';
 import '../../utils/colors.dart'; // Assure-toi d'avoir importé tes couleurs
@@ -25,6 +26,14 @@ class _EditInfoScreenState extends State<EditInfoScreen> {
   @override
   void initState() {
     super.initState();
+    SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark, // icônes noires
+      statusBarColor: Colors.white,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
     final user = Provider.of<AuthService>(context, listen: false).currentUser;
     if (user != null) {
       _nomController.text = user.nom ?? '';
@@ -33,9 +42,19 @@ class _EditInfoScreenState extends State<EditInfoScreen> {
       _contactController.text = user.contact ?? '';
     }
   }
+  
 
   @override
   void dispose() {
+    // Restaure le style global
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ),
+  );
     _nomController.dispose();
     _prenomController.dispose();
     _usernameController.dispose();

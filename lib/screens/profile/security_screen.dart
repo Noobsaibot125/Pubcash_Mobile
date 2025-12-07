@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/custom_button.dart';
+import 'package:flutter/services.dart';
 
 class SecurityScreen extends StatefulWidget {
   const SecurityScreen({super.key});
@@ -71,4 +72,28 @@ class _SecurityScreenState extends State<SecurityScreen> {
       ),
     );
   }
+  @override
+void initState() {
+  super.initState();
+
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark,
+      statusBarColor: Colors.white,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
+}
+@override
+void dispose() {
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
+  super.dispose();
+}
+
 }

@@ -16,25 +16,29 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // On garde le edgeToEdge pour un rendu moderne
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  // Affiche les barres système normalement (pas en edge-to-edge)
+  await SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.manual,
+    overlays: [
+      SystemUiOverlay.top,
+      SystemUiOverlay.bottom,
+    ],
+  );
 
+  // Style des barres système (BLANC + icônes noires)
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
-      // 👇 CORRECTION : On met BLANC ici pour prolonger ta barre de menu
+      // Barre du bas (navigation Android)
       systemNavigationBarColor: Colors.white,
-
-      // Pas de ligne de séparation
       systemNavigationBarDividerColor: Colors.transparent,
-
-      // Icônes foncées (gris sombre) pour être visibles sur le blanc
       systemNavigationBarIconBrightness: Brightness.dark,
 
-      // Barre du haut transparente
-      statusBarColor: Colors.transparent,
+      // Barre du haut (status bar)
+      statusBarColor: Colors.white,
       statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
 
-      // Désactive le "scrim" (voile sombre) que Android met parfois par défaut
+      // Force l'affichage propre (évite le voile noir Android)
       systemNavigationBarContrastEnforced: false,
     ),
   );

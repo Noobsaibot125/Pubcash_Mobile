@@ -195,6 +195,20 @@ class NotificationService {
     print('Notification cliquée: ${message.data}');
     // Idéalement ici, on navigue vers l'écran concerné et on rafraichit le badge
     refreshUnreadCount();
+    // --- AJOUT : Gestion spécifique pour les messages ---
+    if (message.data['type'] == 'nouveau_message') {
+       // On redirige vers l'index 3 (l'onglet Messages dans MainNavigationScreen)
+       // Note : Cela suppose que tu passes un argument ou utilises un Provider pour changer l'index.
+       // Une solution simple est de renvoyer vers /home et laisser l'utilisateur voir le badge.
+       // Si tu as un système de routage avancé, tu peux push vers InboxScreen directement.
+       
+       navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        '/home', // On va à l'accueil
+        (route) => false,
+        arguments: {'tabIndex': 3} // Optionnel : Si ton HomeScreen gère les arguments pour changer d'onglet
+      );
+      return;
+    }
     Future.delayed(const Duration(milliseconds: 500), () {
       navigatorKey.currentState?.pushNamedAndRemoveUntil(
         '/home',

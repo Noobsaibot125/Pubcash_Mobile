@@ -2,6 +2,7 @@
 import '../services/promotion_service.dart';
 import '../utils/colors.dart';
 import 'simple_video_player.dart'; // Importe le nouveau fichier // Nous allons crÃ©er ce fichier juste aprÃ¨s
+import 'package:flutter/services.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -18,9 +19,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void initState() {
     super.initState();
+     SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark,
+      statusBarColor: Colors.white,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
+
     _loadHistory();
   }
-
+@override
+void dispose() {
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
+  super.dispose();
+}
   Future<void> _loadHistory() async {
     setState(() => _isLoading = true);
     try {

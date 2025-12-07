@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class TermsScreen extends StatelessWidget {
   const TermsScreen({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
+ @override
+Widget build(BuildContext context) {
+  return AnnotatedRegion<SystemUiOverlayStyle>(
+    value: const SystemUiOverlayStyle(
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark, // Boutons noirs
+      statusBarColor: Colors.white,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+    child: Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text(
@@ -28,12 +36,11 @@ class TermsScreen extends StatelessWidget {
                 _cguText,
                 style: TextStyle(
                   fontSize: 14,
-                  height: 1.6, // Espacement des lignes pour la lisibilité
+                  height: 1.6,
                   color: Colors.black87,
                 ),
               ),
               const SizedBox(height: 30),
-              // Bouton "J'ai compris" optionnel en bas de page
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -52,15 +59,16 @@ class TermsScreen extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // Le texte est stocké ici pour garder le widget propre
 const String _cguText = '''
 CONDITIONS GÉNÉRALES D'UTILISATION (CGU) - PUBCASH
 
-Dernière mise à jour : [Date du jour]
+Dernière mise à jour : 07/12/2025
 
 1. MENTIONS LÉGALES
 L'application mobile et la plateforme web Pubcash (ci-après dénommées "la Plateforme") sont éditées et exploitées par la société KKS-TECHNOLOGIES.
