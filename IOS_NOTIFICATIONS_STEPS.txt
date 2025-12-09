@@ -1,0 +1,69 @@
+GUIDE D'IMPLÉMENTATION DES NOTIFICATIONS IOS (SUITE ET FIN)
+==========================================================
+
+Ce fichier récapitule toutes les étapes restantes pour finaliser les notifications iOS.
+À ce stade, vous avez déjà :
+1. Configuré le code Dart (`NotificationService`).
+2. Ajouté le fichier `GoogleService-Info.plist` dans le dossier `ios/Runner`.
+
+IL RESTE 3 GRANDES ÉTAPES (Nécessite impérativement un compte Apple Developer et un Mac pour la compilation).
+
+-------------------------------------------------------------------------
+ÉTAPE 1 : CRÉATION DE LA CLÉ APNs (Sur le site Apple Developer)
+-------------------------------------------------------------------------
+Le système de notification d'Apple (APNs) est différent d'Android. Il faut une "Clé" pour autoriser Firebase à envoyer des messages.
+
+1. Allez sur https://developer.apple.com/account/
+2. Naviguez vers "Certificates, Identifiers & Profiles".
+3. Dans le menu de gauche, cliquez sur "Keys".
+4. Cliquez sur le bouton "+" pour créer une nouvelle clé.
+5. Nom de la clé : "Firebase Push PubCash".
+6. Cochez la case "Apple Push Notifications service (APNs)".
+7. Cliquez sur "Continue" puis "Register".
+8. IMPORTANT : Téléchargez le fichier `.p8` généré.
+   ATTENTION : Vous ne pouvez le télécharger qu'une seule fois. Ne le perdez pas !
+9. Notez également votre "Key ID" (affiché sur la page) et votre "Team ID" (en haut à droite, sous votre nom).
+
+-------------------------------------------------------------------------
+ÉTAPE 2 : LIER APPLE À FIREBASE (Sur la console Firebase)
+-------------------------------------------------------------------------
+1. Allez sur la console Firebase de votre projet PubCash.
+2. Cliquez sur l'engrenage "Paramètres du projet" > Onglet "Cloud Messaging".
+3. Faites défiler jusqu'à la section "Configuration de l'application iOS".
+4. Cherchez la ligne "Clé d'authentification APNs" et cliquez sur "Importer".
+5. Envoyez le fichier `.p8` que vous venez de télécharger.
+6. Remplissez les champs :
+   - ID de clé (Key ID) : Celui noté à l'étape précédente.
+   - ID d'équipe (Team ID) : Celui noté à l'étape précédente.
+7. Cliquez sur "Importer".
+
+-------------------------------------------------------------------------
+ÉTAPE 3 : CONFIGURATION XCODE (À faire sur un MAC)
+-------------------------------------------------------------------------
+C'est l'étape de compilation finale. Windows ne peut pas faire ça.
+
+1. Ouvrez le projet sur un Mac.
+2. Lancez Xcode et ouvrez le fichier `ios/Runner.xcworkspace` (le fichier blanc, pas le bleu).
+3. Dans l'arborescence à gauche, clic droit sur le dossier jaune "Runner".
+4. Choisissez "Add Files to Runner..." et sélectionnez le fichier `GoogleService-Info.plist` qui est déjà dans le dossier.
+   (C'est crucial : même s'il est dans le dossier, Xcode l'ignore tant que vous ne faites pas cette manip).
+5. Cliquez sur la racine du projet "Runner" (l'icône bleue en haut à gauche).
+6. Sélectionnez la cible "Runner" dans la liste "TARGETS".
+7. Allez dans l'onglet "Signing & Capabilities".
+8. Cliquez sur "+ Capability" (en haut à gauche de cet onglet).
+   - Cherchez et ajoutez "Push Notifications".
+   - Cherchez et ajoutez "Background Modes".
+9. Dans la section "Background Modes" qui vient d'apparaître, cochez :
+   - [x] Remote notifications
+   - [x] Background fetch
+
+-------------------------------------------------------------------------
+ÉTAPE 4 : TEST FINAL
+-------------------------------------------------------------------------
+1. Branchez un iPhone physique au Mac (les notifications ne marchent pas toujours bien sur simulateur).
+2. Lancez l'application en mode Debug ou Release.
+3. Acceptez la demande de permission de notification au lancement.
+4. Vérifiez dans la console (logs) que le Token FCM s'affiche bien.
+5. Envoyez une notification de test depuis la console Firebase pour valider.
+
+FÉLICITATIONS, VOS NOTIFICATIONS IOS SONT OPÉRATIONNELLES !
