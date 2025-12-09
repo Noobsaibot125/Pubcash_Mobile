@@ -64,10 +64,10 @@ class _EditInfoScreenState extends State<EditInfoScreen> {
   }
 
   // --- 1. POPUP DE SUCCÈS ---
-  void _showSuccessDialog() {
+ void _showSuccessDialog() {
     showDialog(
       context: context,
-      barrierDismissible: false, // L'utilisateur doit cliquer sur OK
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: Column(
@@ -86,8 +86,8 @@ class _EditInfoScreenState extends State<EditInfoScreen> {
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
               onPressed: () {
-                Navigator.pop(ctx); // Ferme le popup
-                Navigator.pop(context); // Retourne à l'écran précédent (Profil)
+                Navigator.pop(ctx);
+                Navigator.pop(context);
               },
               child: const Text("OK", style: TextStyle(color: Colors.white)),
             ),
@@ -97,7 +97,6 @@ class _EditInfoScreenState extends State<EditInfoScreen> {
     );
   }
 
-  // --- 2. POPUP D'ERREUR ---
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
@@ -110,10 +109,7 @@ class _EditInfoScreenState extends State<EditInfoScreen> {
              Text("Erreur", style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        content: Text(
-          message,
-          textAlign: TextAlign.center,
-        ),
+        content: Text(message, textAlign: TextAlign.center),
         actions: [
           Center(
             child: TextButton(
@@ -130,13 +126,10 @@ class _EditInfoScreenState extends State<EditInfoScreen> {
     if (_nomController.text.trim().isEmpty || 
         _prenomController.text.trim().isEmpty || 
         _usernameController.text.trim().isEmpty) {
-      _showErrorDialog("Veuillez remplir les champs obligatoires (Nom, Prénom, Pseudo).");
+      _showErrorDialog("Veuillez remplir les champs obligatoires.");
       return;
     }
-
     final user = Provider.of<AuthService>(context, listen: false).currentUser;
-    
-    // Si Google/Facebook, pas de mot de passe requis
     if (user != null && user.isSocialUser) {
       await _performUpdate(skipPasswordCheck: true);
     } else {
@@ -145,8 +138,7 @@ class _EditInfoScreenState extends State<EditInfoScreen> {
   }
 
   Future<void> _performUpdate({bool skipPasswordCheck = false}) async {
-    setState(() => _isLoading = true); // Affiche le chargement
-
+    setState(() => _isLoading = true);
     try {
       await Provider.of<AuthService>(context, listen: false).updateUserProfile(
         nom: _nomController.text,
@@ -156,24 +148,19 @@ class _EditInfoScreenState extends State<EditInfoScreen> {
         currentPassword: skipPasswordCheck ? "" : _passwordCheckController.text,
         newPassword: null,
       );
-
       if (mounted) {
         setState(() => _isLoading = false);
-        _showSuccessDialog(); // Affiche le popup de succès
+        _showSuccessDialog();
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
         String errorMsg = e.toString();
-        
-        // Détection intelligente de l'erreur 401 (Mot de passe incorrect)
         if (errorMsg.contains("401") || errorMsg.toLowerCase().contains("unauthorized")) {
-           errorMsg = "Le mot de passe actuel est incorrect. Veuillez réessayer.";
+           errorMsg = "Le mot de passe actuel est incorrect.";
         } else {
-           // Nettoyage du message d'erreur brut
            errorMsg = errorMsg.replaceAll("Exception:", "").trim();
         }
-        
         _showErrorDialog(errorMsg);
       }
     }
@@ -190,7 +177,7 @@ class _EditInfoScreenState extends State<EditInfoScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Pour modifier vos informations, veuillez confirmer votre mot de passe actuel."),
+            const Text("Confirmez votre mot de passe actuel."),
             const SizedBox(height: 15),
             CustomTextField(
               hintText: "Mot de passe actuel",
@@ -221,41 +208,52 @@ class _EditInfoScreenState extends State<EditInfoScreen> {
       ),
     );
   }
+  // --- FIN DES FONCTIONS COPIEES ---
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Informations personnelles", style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+    // 1. Force le style BLANC ici
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.white, // Fond BLANC
+        systemNavigationBarIconBrightness: Brightness.dark, // Icônes noires
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
       ),
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                CustomTextField(hintText: "Nom", controller: _nomController, prefixIcon: Icons.person_outline),
-                CustomTextField(hintText: "Prénom", controller: _prenomController, prefixIcon: Icons.person_outline),
-                CustomTextField(hintText: "Nom d'utilisateur", controller: _usernameController, prefixIcon: Icons.alternate_email, readOnly: true),
-                CustomTextField(hintText: "Téléphone", controller: _contactController, prefixIcon: Icons.phone_android, keyboardType: TextInputType.phone),
-                const SizedBox(height: 30),
-                CustomButton(text: "ENREGISTRER", onPressed: _saveInfo),
-              ],
-            ),
-          ),
-          // Indicateur de chargement
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Informations personnelles", style: TextStyle(color: Colors.black)),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.black),
+        ),
+        backgroundColor: Colors.white,
+        body: SafeArea( // 2. SafeArea protège le bas de page
+          child: Stack(
+            children: [
+              SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    CustomTextField(hintText: "Nom", controller: _nomController, prefixIcon: Icons.person_outline),
+                    CustomTextField(hintText: "Prénom", controller: _prenomController, prefixIcon: Icons.person_outline),
+                    CustomTextField(hintText: "Nom d'utilisateur", controller: _usernameController, prefixIcon: Icons.alternate_email, readOnly: true),
+                    CustomTextField(hintText: "Téléphone", controller: _contactController, prefixIcon: Icons.phone_android, keyboardType: TextInputType.phone),
+                    const SizedBox(height: 30),
+                    CustomButton(text: "ENREGISTRER", onPressed: _saveInfo),
+                  ],
+                ),
               ),
-            ),
-        ],
+              if (_isLoading)
+                Container(
+                  color: Colors.black.withOpacity(0.3),
+                  child: const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

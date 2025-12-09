@@ -5,6 +5,7 @@ import '../../utils/exceptions.dart'; // <--- INDISPENSABLE pour IncompleteProfi
 import 'complete_social_profile_screen.dart'; // <--- INDISPENSABLE pour la navigation
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
+import '../../services/notification_service.dart'; // <--- AJOUT IMPORTANT POUR FCM
 import '../../models/ville.dart';
 import '../../utils/api_constants.dart';
 import '../../utils/colors.dart';
@@ -23,7 +24,6 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  // On utilise ApiService directement ici juste pour charger les villes/communes
   final _apiService = ApiService(); 
 
   // Controllers
@@ -261,7 +261,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       hintText: "Mot de passe",
                       prefixIcon: Icons.lock_outline,
                       controller: _passwordController,
-                      obscureText: _obscurePassword, // Variable 1
+                      obscureText: _obscurePassword,
                       validator: Validators.validatePassword,
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -278,12 +278,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
 
-                    // 3. REMPLACE LE CHAMP CONFIRMER MOT DE PASSE
                     CustomTextField(
                       hintText: "Confirmer mot de passe",
                       prefixIcon: Icons.lock_outline,
                       controller: _confirmPasswordController,
-                      obscureText: _obscureConfirmPassword, // Variable 2
+                      obscureText: _obscureConfirmPassword,
                       validator: (v) => Validators.validateConfirmPassword(v, _passwordController.text),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -405,13 +404,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const Text("Ou inscrivez-vous avec", textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted)),
                     const SizedBox(height: 15),
 
-                    // --- BOUTONS SOCIAUX ---
-                     SocialLoginButtons(
+                    // --- BOUTONS SOCIAUX (CORRIGÉS) ---
+                    SocialLoginButtons(
                       onFacebookTap: () async {
                         try {
                           await authService.loginWithFacebook();
                           
-                          // 1. Succès -> On va à l'accueil et on efface l'historique
+                          // ✅ Mettre à jour FCM
+                          await NotificationService().forceRefreshToken();
+
                           if (mounted) {
                             Navigator.of(context).pushNamedAndRemoveUntil(
                               '/home', 
@@ -419,7 +420,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             );
                           }
                         } on IncompleteProfileException {
-                          // 2. Exception Profil -> On va à la page de complétion
                           if (mounted) {
                             Navigator.pushReplacement(
                               context,
@@ -429,7 +429,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             );
                           }
                         } catch (e) {
-                          // 3. Autre erreur -> On l'affiche
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
@@ -444,7 +443,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         try {
                           await authService.loginWithGoogle();
                           
-                          // 1. Succès -> On va à l'accueil et on efface l'historique
+                          // ✅ Mettre à jour FCM
+                          await NotificationService().forceRefreshToken();
+
                           if (mounted) {
                             Navigator.of(context).pushNamedAndRemoveUntil(
                               '/home', 
@@ -452,7 +453,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             );
                           }
                         } on IncompleteProfileException {
-                          // 2. Exception Profil -> On va à la page de complétion
                           if (mounted) {
                             Navigator.pushReplacement(
                               context,
@@ -462,7 +462,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             );
                           }
                         } catch (e) {
-                          // 3. Autre erreur -> On l'affiche
+                          // ✅ Gestion silencieuse de l'annulation Google
+                          if (e.toString().contains('GOOGLE_CANCELED')) {
+                            print("Annulation Google ignorée");
+                            return;
+                          }
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(

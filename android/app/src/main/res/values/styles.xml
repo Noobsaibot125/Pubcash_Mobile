@@ -1,23 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is off -->
+
+    <!-- Splash screen pendant le lancement -->
     <style name="LaunchTheme" parent="Theme.AppCompat.Light.NoActionBar">
-        <!-- Show a splash screen on the activity. Automatically removed when
-             the Flutter engine draws its first frame -->
         <item name="android:windowBackground">@drawable/launch_background</item>
-        <!-- Active le dessin sous la barre de navigation pour le edge-to-edge -->
-        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
-    
-    <!-- Theme applied to the Android Window as soon as the process has started. -->
+
+    <!-- Thème principal de l'app -->
     <style name="NormalTheme" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="android:windowBackground">?android:colorBackground</item>
-        <!-- Définit explicitement les barres comme transparentes au niveau natif -->
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <!-- On met la barre de navigation en BLANC pour correspondre à la demande -->
+
+        <!-- Fond de l'application -->
+        <item name="android:windowBackground">@android:color/white</item>
+
+        <!-- ✅ Barre du haut BLANCHE -->
+        <item name="android:statusBarColor">@android:color/white</item>
+
+        <!-- ✅ Barre du bas BLANCHE -->
         <item name="android:navigationBarColor">@android:color/white</item>
-        <!-- Important pour avoir les icônes foncées sur fond blanc (API 27+) -->
+
+        <!-- ✅ Icônes NOIRES -->
+        <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
-        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+
+        <!-- ✅ On enlève le mode edge-to-edge natif -->
+        <item name="android:windowDrawsSystemBarBackgrounds">false</item>
+
     </style>
+
 </resources>

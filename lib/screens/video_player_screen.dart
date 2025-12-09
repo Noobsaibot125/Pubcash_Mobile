@@ -41,6 +41,9 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen>
   // États UI
   bool _hasShared = false;
   bool _isCancelling = false;
+  
+  // NOUVEAU : État pour le chargement du partage (bouton cliqué)
+  bool _isSharingLoading = false;
 
   // Logique de contrôle
   bool _waitingForShareReturn = false;
@@ -98,6 +101,8 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen>
         if (mounted) {
           setState(() {
             _hasShared = true;
+            // On peut arrêter le loading ici si on veut, mais _hasShared cachera le tout
+             _isSharingLoading = false; 
           });
         }
         _onShareCompleted();
@@ -132,7 +137,6 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen>
     if (!mounted) return;
     widget.onVideoViewed();
 
-    // Modification pour forcer le retour à l'écran précédent (Home) de manière robuste
     if (Navigator.canPop(context)) {
       Navigator.of(context).pop(true);
     }
@@ -178,15 +182,18 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen>
       if (widget.promotion.gameId != null && widget.promotion.gameType == 'quiz') {
         _showQuiz();
       } else {
-        // 1. Validation de la vue
         await _promotionService.markPromotionAsViewed(widget.promotion.id);
-
-        // 2. RETOUR IMMÉDIAT
         _finishProcess();
       }
 
     } catch (e) {
       _isValidatingShare = false;
+      // En cas d'erreur de validation, on réaffiche le bouton pour réessayer
+      if (mounted) {
+        setState(() {
+          _isSharingLoading = false;
+        });
+      }
       print("❌ Erreur validation: $e");
 
       if (e.toString().contains("DEVICE_FRAUD")) {
@@ -209,6 +216,11 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen>
   }
 
   Future<void> _handleShare() async {
+    // 1. On cache le bouton immédiatement et on affiche le texte
+    setState(() {
+      _isSharingLoading = true;
+    });
+
     try {
       final user = Provider.of<AuthService>(context, listen: false).currentUser;
       final codeParrainage = user?.codeParrainage ?? '';
@@ -222,7 +234,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen>
       final savePath = '${tempDir.path}/video_${widget.promotion.id}.mp4';
 
       if (!File(savePath).existsSync()) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Préparation du partage..."), duration: Duration(seconds: 1)));
+        // Note: J'ai retiré le SnackBar "Préparation..." car le texte s'affiche désormais à la place du bouton
         await Dio().download(widget.promotion.urlVideo, savePath);
       }
 
@@ -243,7 +255,12 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      _waitingForShareReturn = false;
+      
+      // En cas d'erreur (ex: échec du téléchargement), on réaffiche le bouton
+      setState(() {
+        _waitingForShareReturn = false;
+        _isSharingLoading = false;
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -271,11 +288,7 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen>
                 widget.promotion.bonneReponse!,
               );
 
-              // On marque la vue mais on n'affiche plus la notif locale
               await _promotionService.markPromotionAsViewed(widget.promotion.id);
-              
-              // SUPPRIMÉ : NotificationService().showInstantNotification(...)
-
               if (mounted) _finishProcess();
 
             } catch (e) {
@@ -423,9 +436,28 @@ class _FullScreenVideoScreenState extends State<FullScreenVideoScreen>
                       ),
 
                     if (_hasLiked)
-                      _hasShared
-                          ? const SizedBox()
-                          : ElevatedButton.icon(
+                      // MODIFICATION ICI : Gestion de l'affichage du bouton vs message
+                      if (_hasShared)
+                        const SizedBox() // Déjà partagé, on n'affiche rien (ou le quiz arrive)
+                      else if (_isSharingLoading)
+                        // Affichage du message de chargement à la place du bouton
+                        const Column(
+                          children: [
+                            CircularProgressIndicator(color: Colors.white),
+                            SizedBox(height: 15),
+                            Text(
+                              "Préparation du partage...",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        // Bouton Partager normal
+                        ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.green,
                                 padding: const EdgeInsets.symmetric(

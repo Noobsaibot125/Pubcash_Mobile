@@ -7,7 +7,7 @@ class ApiConstants {
   
   // METS CECI SUR 'true' POUR TRAVAILLER EN LOCAL
   // METS CECI SUR 'false' POUR TESTER LA VERSION EN LIGNE (MÊME EN DEBUG)
- static const bool useLocalInDebug = true; // (false pour prod et true pour local)
+ static const bool useLocalInDebug = false; // (false pour prod et true pour local)
   // ==============================================================================
   // ⚙️ CONFIGURATION DES URLS
   // ==============================================================================

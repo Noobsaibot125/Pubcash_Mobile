@@ -224,7 +224,7 @@ bool _obscurePassword = true;
                           }
                         }
                       },
-                      onGoogleTap: () async {
+                    onGoogleTap: () async {
                         print("🔵 Clic sur Google Login");
                         try {
                           await authService.loginWithGoogle();
@@ -247,6 +247,12 @@ bool _obscurePassword = true;
                             );
                           }
                         } catch (e) {
+                          // ✅ CORRECTION ICI : Gestion de l'annulation
+                          if (e.toString().contains('GOOGLE_CANCELED')) {
+                            print("L'utilisateur a annulé la connexion Google (Pas d'erreur affichée)");
+                            return; // ON ARRÊTE TOUT, ON NE FAIT RIEN
+                          }
+
                           print("🔴 Erreur Google Login: $e");
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(

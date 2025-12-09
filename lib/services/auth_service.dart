@@ -151,26 +151,30 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  Future<void> loginWithGoogle() async {
+ Future<void> loginWithGoogle() async {
     try {
       _setLoading(true);
+      // 1. On lance la connexion
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser != null) {
-        final GoogleSignInAuthentication googleAuth =
-            await googleUser.authentication;
-        final response = await _apiService.post(
-          ApiConstants.googleAuth,
-          data: {'accessToken': googleAuth.accessToken},
-        );
-        await _handleAuthResponse(response.data);
+      
+      // 2. CORRECTION ICI : Si googleUser est null, c'est que l'utilisateur a annulé
+      if (googleUser == null) {
+        throw Exception('GOOGLE_CANCELED'); // On lève une exception volontaire
       }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final response = await _apiService.post(
+        ApiConstants.googleAuth,
+        data: {'accessToken': googleAuth.accessToken},
+      );
+      await _handleAuthResponse(response.data);
     } catch (e) {
-      rethrow;
+      rethrow; // On renvoie l'erreur vers l'écran de connexion
     } finally {
       _setLoading(false);
     }
   }
-
   Future<void> loginWithFacebook() async {
     try {
       _setLoading(true);

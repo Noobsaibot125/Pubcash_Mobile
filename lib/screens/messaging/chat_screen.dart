@@ -5,7 +5,7 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:pubcash_mobile/utils/api_constants.dart';
 import '../../services/message_service.dart';
 import '../../utils/colors.dart';
-import 'package:flutter/foundation.dart' as foundation; // Pour la config web/mobile
+import 'package:flutter/foundation.dart' as foundation;
 
 class ChatScreen extends StatefulWidget {
   final int contactId;
@@ -82,7 +82,9 @@ class _ChatScreenState extends State<ChatScreen> {
       _textController.clear();
       await _loadMessages();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erreur d'envoi")));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("Erreur d'envoi")));
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -103,7 +105,9 @@ class _ChatScreenState extends State<ChatScreen> {
       await _loadMessages();
     } catch (e) {
       print("Erreur upload image: $e");
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erreur d'envoi image")));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Erreur d'envoi image")));
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -127,151 +131,269 @@ class _ChatScreenState extends State<ChatScreen> {
     final contactPhotoUrl = _getProfileUrl(widget.contactPhoto);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: const Color(0xFFEFE7DE),
       appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        leadingWidth: 20,
+        titleSpacing: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         title: Row(
           children: [
+            const SizedBox(width: 5),
             CircleAvatar(
-              radius: 16,
-              backgroundImage: contactPhotoUrl != null ? NetworkImage(contactPhotoUrl) : null,
-              backgroundColor: Colors.grey[200],
-              child: contactPhotoUrl == null ? const Icon(Icons.person, size: 16, color: Colors.grey) : null,
+              radius: 18,
+              backgroundImage: contactPhotoUrl != null
+                  ? NetworkImage(contactPhotoUrl)
+                  : null,
+              backgroundColor: Colors.grey[300],
+              child: contactPhotoUrl == null
+                  ? const Icon(Icons.person, size: 20, color: Colors.grey)
+                  : null,
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(widget.contactName, style: const TextStyle(color: Colors.black, fontSize: 16), overflow: TextOverflow.ellipsis),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.contactName,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const Text(
+                    "En ligne",
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        backgroundColor: Colors.white,
-        elevation: 1,
-        iconTheme: const IconThemeData(color: Colors.black),
+        // ACTIONS SUPPRIMÉES ICI (Appel, Vidéo, Menu)
+        actions: [], 
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
+      body: Column(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                if (_showEmoji) setState(() => _showEmoji = false);
+                FocusScope.of(context).unfocus();
+              },
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                  ? const Center(
+                      child: CircularProgressIndicator(color: AppColors.primary))
                   : ListView.builder(
                       controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 10),
                       itemCount: _messages.length,
                       itemBuilder: (ctx, i) {
                         final msg = _messages[i];
-                        final isThem = msg['id_expediteur'] == widget.contactId && msg['type_expediteur'] == widget.contactType;
+                        final isThem = msg['id_expediteur'] == widget.contactId &&
+                            msg['type_expediteur'] == widget.contactType;
 
                         return Align(
-                          alignment: isThem ? Alignment.centerLeft : Alignment.centerRight,
+                          alignment: isThem
+                              ? Alignment.centerLeft
+                              : Alignment.centerRight,
                           child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            padding: const EdgeInsets.all(4),
                             decoration: BoxDecoration(
                               color: isThem ? Colors.white : AppColors.primary,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 2, offset: const Offset(0, 1))],
-                            ),
-                            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (msg['type_contenu'] == 'image' && msg['url_media'] != null)
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(_getMediaUrl(msg['url_media']),
-                                      loadingBuilder: (ctx, child, progress) => progress == null ? child : const SizedBox(height: 100, width: 100, child: Center(child: CircularProgressIndicator())),
-                                      errorBuilder: (ctx, err, stack) => const Icon(Icons.broken_image),
-                                    ),
-                                  )
-                                else
-                                  Text(msg['contenu'] ?? '', style: TextStyle(color: isThem ? Colors.black87 : Colors.white, fontSize: 15)),
+                              borderRadius: BorderRadius.only(
+                                topLeft: const Radius.circular(12),
+                                topRight: const Radius.circular(12),
+                                bottomLeft: isThem
+                                    ? const Radius.circular(0)
+                                    : const Radius.circular(12),
+                                bottomRight: isThem
+                                    ? const Radius.circular(12)
+                                    : const Radius.circular(0),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 2,
+                                  offset: const Offset(0, 1),
+                                )
                               ],
+                            ),
+                            constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.of(context).size.width * 0.75),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (msg['type_contenu'] == 'image' &&
+                                      msg['url_media'] != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 5),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.network(
+                                          _getMediaUrl(msg['url_media']),
+                                          fit: BoxFit.cover,
+                                          loadingBuilder:
+                                              (ctx, child, progress) =>
+                                                  progress == null
+                                                      ? child
+                                                      : Container(
+                                                          height: 150,
+                                                          width: 150,
+                                                          color: Colors.black12,
+                                                          child: const Center(
+                                                              child:
+                                                                  CircularProgressIndicator())),
+                                          errorBuilder: (ctx, err, stack) =>
+                                              const Icon(Icons.broken_image),
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    Padding(
+                                      padding: const EdgeInsets.all(4.0),
+                                      child: Text(
+                                        msg['contenu'] ?? '',
+                                        style: TextStyle(
+                                          color: isThem
+                                              ? Colors.black87
+                                              : Colors.white,
+                                          fontSize: 15.5,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         );
                       },
                     ),
             ),
+          ),
 
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              color: Colors.white,
+          // ZONE DE SAISIE CORRIGÉE
+          // Utilisation de SafeArea pour gérer automatiquement le bas de l'écran (barre système Android / Home bar iOS)
+          SafeArea(
+            child: Container(
+              // Suppression du padding bottom fixe (25) qui causait le problème
+              padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 8), 
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      IconButton(
-                        icon: Icon(_showEmoji ? Icons.keyboard : Icons.emoji_emotions_outlined, color: Colors.grey),
-                        onPressed: () {
-                          setState(() => _showEmoji = !_showEmoji);
-                          if (_showEmoji) {
-                            FocusScope.of(context).unfocus();
-                          } else {
-                            FocusScope.of(context).requestFocus();
-                          }
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.image_outlined, color: Colors.grey),
-                        onPressed: () => _pickImage(ImageSource.gallery),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.camera_alt_outlined, color: Colors.grey),
-                        onPressed: () => _pickImage(ImageSource.camera),
-                      ),
                       Expanded(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 15),
-                          decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(25)),
-                          child: TextField(
-                            controller: _textController,
-                            onTap: () {
-                              if (_showEmoji) setState(() => _showEmoji = false);
-                            },
-                            decoration: const InputDecoration(hintText: "Message...", border: InputBorder.none),
-                            minLines: 1,
-                            maxLines: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  _showEmoji
+                                      ? Icons.keyboard
+                                      : Icons.emoji_emotions_outlined,
+                                  color: Colors.grey[600],
+                                ),
+                                onPressed: () {
+                                  setState(() => _showEmoji = !_showEmoji);
+                                  if (_showEmoji) {
+                                    FocusScope.of(context).unfocus();
+                                  } else {
+                                    FocusScope.of(context).requestFocus();
+                                  }
+                                },
+                              ),
+                              Expanded(
+                                child: TextField(
+                                  controller: _textController,
+                                  onTap: () {
+                                    if (_showEmoji)
+                                      setState(() => _showEmoji = false);
+                                  },
+                                  decoration: const InputDecoration(
+                                    hintText: "Message",
+                                    hintStyle: TextStyle(color: Colors.grey),
+                                    border: InputBorder.none,
+                                    contentPadding:
+                                        EdgeInsets.symmetric(vertical: 10),
+                                  ),
+                                  minLines: 1,
+                                  maxLines: 6,
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.attach_file,
+                                    color: Colors.grey[600]),
+                                onPressed: () =>
+                                    _pickImage(ImageSource.gallery),
+                              ),
+                              if (_textController.text.isEmpty)
+                                IconButton(
+                                  icon: Icon(Icons.camera_alt_outlined,
+                                      color: Colors.grey[600]),
+                                  onPressed: () =>
+                                      _pickImage(ImageSource.camera),
+                                ),
+                            ],
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       GestureDetector(
                         onTap: _isSending ? null : _sendMessage,
                         child: CircleAvatar(
                           backgroundColor: AppColors.primary,
-                          radius: 22,
+                          radius: 24,
                           child: _isSending
-                            ? const Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Icon(Icons.send, color: Colors.white, size: 20),
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2))
+                              : const Icon(Icons.send,
+                                  color: Colors.white, size: 22),
                         ),
                       ),
                     ],
                   ),
-
-                  // CONFIGURATION EMOJI PICKER CORRIGÉE (V4.x)
+                  
+                  // PICKER EMOJI
                   if (_showEmoji)
                     SizedBox(
-                      height: 250,
+                      height: 270,
                       child: EmojiPicker(
                         onEmojiSelected: (category, emoji) {
-                          _textController.text = _textController.text + emoji.emoji;
+                          _textController.text =
+                              _textController.text + emoji.emoji;
+                          setState(() {});
                         },
                         config: Config(
-                          height: 250,
+                          height: 270,
                           checkPlatformCompatibility: true,
-                          
-                          // 1. Emoji View Config
                           emojiViewConfig: EmojiViewConfig(
                             columns: 7,
-                            emojiSizeMax: 32 * (foundation.defaultTargetPlatform == TargetPlatform.iOS ? 1.30 : 1.0),
-                            verticalSpacing: 0,
-                            horizontalSpacing: 0,
-                            gridPadding: EdgeInsets.zero,
-                            recentsLimit: 28,
-                            buttonMode: ButtonMode.MATERIAL,
+                            emojiSizeMax: 32 *
+                                (foundation.defaultTargetPlatform ==
+                                        TargetPlatform.iOS
+                                    ? 1.30
+                                    : 1.0),
+                            backgroundColor: const Color(0xFFF2F2F2),
                           ),
-                          
-                          // 2. Category View Config
                           categoryViewConfig: CategoryViewConfig(
                             initCategory: Category.RECENT,
                             backgroundColor: const Color(0xFFF2F2F2),
@@ -279,28 +401,24 @@ class _ChatScreenState extends State<ChatScreen> {
                             iconColor: Colors.grey,
                             iconColorSelected: AppColors.primary,
                             backspaceColor: AppColors.primary,
-                            tabIndicatorAnimDuration: kTabScrollDuration,
-                            categoryIcons: const CategoryIcons(),
                           ),
-                          
-                          // 3. Skin Tone Config (CORRIGÉ ICI)
                           skinToneConfig: const SkinToneConfig(
-                            dialogBackgroundColor: Colors.white, // Renommé: dialogBgColor -> dialogBackgroundColor
+                            dialogBackgroundColor: Colors.white,
                             indicatorColor: Colors.grey,
-                            enabled: true, 
+                            enabled: true,
                           ),
-                          
-                          // 4. Autres Configs
-                          bottomActionBarConfig: const BottomActionBarConfig(enabled: false),
-                          searchViewConfig: const SearchViewConfig(backgroundColor: Color(0xFFF2F2F2)),
+                          bottomActionBarConfig:
+                              const BottomActionBarConfig(enabled: false),
+                          searchViewConfig: const SearchViewConfig(
+                              backgroundColor: Color(0xFFF2F2F2)),
                         ),
                       ),
                     ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
