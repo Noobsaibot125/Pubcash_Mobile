@@ -151,30 +151,40 @@ class AuthService with ChangeNotifier {
     }
   }
 
- Future<void> loginWithGoogle() async {
+Future<void> loginWithGoogle() async {
     try {
       _setLoading(true);
-      // 1. On lance la connexion
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       
-      // 2. CORRECTION ICI : Si googleUser est null, c'est que l'utilisateur a annulé
       if (googleUser == null) {
-        throw Exception('GOOGLE_CANCELED'); // On lève une exception volontaire
+        throw Exception('GOOGLE_CANCELED'); 
       }
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final response = await _apiService.post(
         ApiConstants.googleAuth,
         data: {'accessToken': googleAuth.accessToken},
       );
       await _handleAuthResponse(response.data);
+
+    } on DioException catch (e) {
+      // --- CAPTURE SPECIFIC BACKEND MESSAGE ---
+      if (e.response != null && e.response!.data is Map) {
+        final data = e.response!.data as Map;
+        if (data.containsKey('message')) {
+           // Throw the specific message (e.g., "Votre compte a été suspendu...")
+           throw Exception(data['message']); 
+        }
+      }
+      // Fallback for other Dio errors
+      throw Exception("Erreur de connexion avec Google.");
     } catch (e) {
-      rethrow; // On renvoie l'erreur vers l'écran de connexion
+      rethrow; 
     } finally {
       _setLoading(false);
     }
   }
+
   Future<void> loginWithFacebook() async {
     try {
       _setLoading(true);
@@ -186,7 +196,20 @@ class AuthService with ChangeNotifier {
           data: {'accessToken': accessToken.token},
         );
         await _handleAuthResponse(response.data);
+      } else if (result.status == LoginStatus.cancelled) {
+         throw Exception('FACEBOOK_CANCELED');
+      } else {
+         throw Exception('Erreur connexion Facebook: ${result.message}');
       }
+    } on DioException catch (e) {
+      // --- CAPTURE SPECIFIC BACKEND MESSAGE ---
+      if (e.response != null && e.response!.data is Map) {
+        final data = e.response!.data as Map;
+        if (data.containsKey('message')) {
+           throw Exception(data['message']);
+        }
+      }
+      throw Exception("Erreur de connexion avec Facebook.");
     } catch (e) {
       rethrow;
     } finally {
@@ -200,26 +223,32 @@ class AuthService with ChangeNotifier {
 
   Future<void> refreshUserProfile() async {
     if (_token == null) return;
-    if (_isRefreshing) return; // Sécurité anti-boucle
+    if (_isRefreshing) return;
 
     try {
       final response = await _apiService.get(ApiConstants.userProfile);
 
       if (response.statusCode == 200 && response.data != null) {
         _currentUser = User.fromJson(response.data);
-
-        // MISE EN CACHE DU PROFIL
         await _secureStorage.write(
           key: 'cached_user_profile',
           value: jsonEncode(response.data),
         );
-
         _checkIfProfileIsComplete();
         notifyListeners();
       }
     } catch (e) {
       print("⚠️ Erreur refresh profil: $e");
 
+      // --- ADD THIS BLOCK ---
+      if (e is DioException) {
+        // If we get a 403 Forbidden, it likely means the account is blocked/disabled
+        if (e.response?.statusCode == 403) {
+            print("⛔ Compte bloqué ou désactivé détecté. Déconnexion forcée.");
+            await logout(); // This clears tokens and notifies listeners (which should redirect to login)
+            return;
+        }
+      }
       // DÉTECTION ROBUSTE DU 401 (TOKEN EXPIRÉ)
       bool isUnauthorized = false;
       if (e is DioException && e.response?.statusCode == 401) {

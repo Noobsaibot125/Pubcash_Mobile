@@ -26,7 +26,7 @@ final Function(int)? onVideoCountChanged;
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final PromotionService _promotionService = PromotionService();
   // ignore: unused_field
   final VideoService _videoService = VideoService();
@@ -51,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
    @override
   void initState() {
     super.initState();
-    
+    WidgetsBinding.instance.addObserver(this);
     // On s'abonne au flux de notifications dès le lancement
     _badgeSubscription = NotificationService().unreadCountStream.listen((count) {
       if (mounted) {
@@ -102,15 +102,28 @@ class _HomeScreenState extends State<HomeScreen> {
     super.didChangeDependencies();
   }
 
-  @override
-void dispose() {
-  // Très important : on coupe l'écoute quand on quitte l'écran
-  _badgeSubscription?.cancel();
-  _socketSubscription?.cancel();
-  // Note: On ne déconnecte pas le socket car d'autres écrans pourraient l'utiliser
-  super.dispose();
-}
-
+@override
+  void dispose() {
+    // 2. Remove the observer
+    WidgetsBinding.instance.removeObserver(this);
+    
+    _badgeSubscription?.cancel();
+    _socketSubscription?.cancel();
+    super.dispose();
+  }
+@override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      print("📲 Application reprise (foreground). Vérification du statut du compte...");
+      // When app comes to foreground, force a profile refresh.
+      // If the account is blocked, refreshUserProfile (in AuthService) will catch the 403 and logout.
+      final authService = Provider.of<AuthService>(context, listen: false);
+      authService.refreshUserProfile(); 
+      
+      // Optionally refresh other data too
+      _loadData();
+    }
+  }
  Future<void> _loadData() async {
     if (!mounted) return;
     setState(() => _loading = true);
