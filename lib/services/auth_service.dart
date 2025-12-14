@@ -559,4 +559,36 @@ class AuthService with ChangeNotifier {
     }
     return error.toString().replaceAll('Exception:', '').trim();
   }
+  // =========================================================
+  // 7. SUPPRESSION DE COMPTE
+  // =========================================================
+
+  Future<void> deleteAccount({String? password, required String authProvider}) async {
+    try {
+      _setLoading(true);
+      
+      // On s'assure d'avoir l'ID de l'utilisateur actuel
+      if (_currentUser == null || _currentUser!.id == null) {
+        throw Exception("Utilisateur non identifié");
+      }
+
+      await _apiService.post(
+        '/auth/utilisateur/delete-account', // Note le chemin '/utilisateur/'
+        data: {
+          'id': _currentUser!.id,
+          'password': password,
+          'authProvider': authProvider // 'email' ou 'social'
+        },
+      );
+      
+      // Si l'API ne renvoie pas d'erreur, c'est que c'est bon.
+      // On laisse le profile_screen gérer la déconnexion via _logout()
+      
+    } catch (e) {
+      print("Erreur suppression compte: $e");
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
 }
