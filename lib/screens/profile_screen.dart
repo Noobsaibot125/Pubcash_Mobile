@@ -68,9 +68,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 void _showDeleteAccountDialog(BuildContext context, User user) {
     final TextEditingController passwordController = TextEditingController();
-    // Vérifier si l'utilisateur s'est connecté via Email (nécessite MDP) ou Social (Pas de MDP)
-    // On suppose que tu as un moyen de savoir ça, sinon on demande le MDP seulement si user.password est set (logique frontend)
-    bool requiresPassword = user.idGoogle == null && user.idFacebook == null; 
+    
+    // Détection automatique du type de compte
+    // Si l'utilisateur a un ID Google ou Facebook, c'est un compte social -> Pas de mot de passe requis
+    bool isSocialAccount = (user.idGoogle != null && user.idGoogle!.isNotEmpty) || 
+                           (user.idFacebook != null && user.idFacebook!.isNotEmpty);
+    
+    // Si c'est un compte social, on ne demande PAS de mot de passe
+    bool requiresPassword = !isSocialAccount;
 
     showDialog(
       context: context,
@@ -83,13 +88,15 @@ void _showDeleteAccountDialog(BuildContext context, User user) {
               "Votre compte sera supprimé définitivement après 45 jours. Vous pouvez le réactiver à tout moment en vous reconnectant avant ce délai.",
               style: TextStyle(fontSize: 14),
             ),
+            
+            // AFFICHER LE CHAMP MOT DE PASSE UNIQUEMENT SI NÉCESSAIRE
             if (requiresPassword) ...[
               const SizedBox(height: 20),
               TextField(
                 controller: passwordController,
                 obscureText: true,
                 decoration: const InputDecoration(
-                  labelText: "Entrez votre mot de passe",
+                  labelText: "Entrez votre mot de passe pour confirmer",
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -103,9 +110,10 @@ void _showDeleteAccountDialog(BuildContext context, User user) {
           ),
           TextButton(
             onPressed: () async {
+              // Si mot de passe requis mais vide -> Erreur
               if (requiresPassword && passwordController.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Mot de passe requis")),
+                  const SnackBar(content: Text("Mot de passe requis pour confirmer.")),
                 );
                 return;
               }
@@ -113,23 +121,29 @@ void _showDeleteAccountDialog(BuildContext context, User user) {
               // Appel API
               try {
                 await Provider.of<AuthService>(context, listen: false).deleteAccount(
+                  // On envoie le mot de passe seulement si c'était requis
                   password: requiresPassword ? passwordController.text : null,
+                  // On envoie le type d'auth pour que le backend sache quoi vérifier
                   authProvider: requiresPassword ? 'email' : 'social'
                 );
+                
                 Navigator.of(ctx).pop(); // Ferme la modale
                 _logout(); // Déconnecte l'utilisateur
                 
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Demande de suppression prise en compte.")),
+                  const SnackBar(
+                    content: Text("Compte supprimé. Vous avez 45 jours pour le réactiver."),
+                    backgroundColor: Colors.orange, // Orange pour avertissement/info
+                  ),
                 );
               } catch (e) {
                 Navigator.of(ctx).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Erreur: $e"), backgroundColor: Colors.red),
+                  SnackBar(content: Text("Erreur: ${e.toString().replaceAll('Exception:', '')}"), backgroundColor: Colors.red),
                 );
               }
             },
-            child: const Text("Supprimer", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: const Text("Confirmer la suppression", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

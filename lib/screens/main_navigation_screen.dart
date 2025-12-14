@@ -1,6 +1,6 @@
-import 'dart:async'; // Nécessaire pour le Timer
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // AJOUTÉ pour le style système
+import 'package:flutter/services.dart';
 import 'package:pubcash_mobile/services/message_service.dart';
 
 import 'home_screen.dart';
@@ -95,28 +95,29 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const ProfileScreen(),
     ];
 
-    final whatsappDarkGreen = const Color(0xFFFF6B35);
-    final whatsappLightGreen = whatsappDarkGreen.withOpacity(0.2);
+    // TA COULEUR ORANGE
+    final primaryOrange = const Color(0xFFFF6B35); 
+    // Couleur de fond de la pilule (orange très clair)
+    final indicatorColor = primaryOrange.withOpacity(0.2); 
 
-    // 1. Force le style BLANC pour les barres système
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
-        systemNavigationBarColor: Colors.white, // Fond BLANC en bas
-        systemNavigationBarIconBrightness: Brightness.dark, // Icônes noires en bas
-        statusBarColor: Colors.white, // Fond BLANC en haut
-        statusBarIconBrightness: Brightness.dark, // Icônes noires en haut
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
         body: IndexedStack(index: _selectedIndex, children: screens),
         bottomNavigationBar: NavigationBarTheme(
           data: NavigationBarThemeData(
-            indicatorColor: whatsappLightGreen,
+            indicatorColor: indicatorColor, // Fond orange clair
             labelTextStyle: MaterialStateProperty.resolveWith((states) {
               if (states.contains(MaterialState.selected)) {
-                return const TextStyle(
+                return TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                  color: primaryOrange, // TEXTE EN ORANGE ICI
                 );
               }
               return const TextStyle(
@@ -134,47 +135,50 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             onDestinationSelected: _onItemTapped,
             animationDuration: const Duration(seconds: 1),
             destinations: [
-              // Onglet Accueil
+              // --- Onglet Accueil ---
               NavigationDestination(
                 icon: Badge(
                   label: Text('$_videoBadgeCount'),
                   isLabelVisible: _videoBadgeCount > 0,
-                  backgroundColor: whatsappDarkGreen,
+                  backgroundColor: primaryOrange,
                   textColor: Colors.white,
                   child: const Icon(Icons.home_outlined),
                 ),
                 selectedIcon: Badge(
                   label: Text('$_videoBadgeCount'),
                   isLabelVisible: _videoBadgeCount > 0,
-                  backgroundColor: whatsappDarkGreen,
-                  child: const Icon(Icons.home, color: Colors.black),
+                  backgroundColor: primaryOrange,
+                  // MODIFICATION : Icone en orange
+                  child: Icon(Icons.home, color: primaryOrange), 
                 ),
                 label: 'Accueil',
               ),
 
-              // Onglet Gain
+              // --- Onglet Gain ---
               NavigationDestination(
                 icon: Badge(
                   smallSize: 8,
-                  backgroundColor: whatsappDarkGreen,
+                  backgroundColor: primaryOrange,
                   isLabelVisible: false,
                   child: const Icon(Icons.account_balance_wallet_outlined),
                 ),
-                selectedIcon: const Icon(
+                // MODIFICATION : Icone en orange
+                selectedIcon: Icon(
                   Icons.account_balance_wallet,
-                  color: Colors.black,
+                  color: primaryOrange, 
                 ),
                 label: 'Gain',
               ),
 
-              // Onglet Jeu
+              // --- Onglet Jeu ---
               NavigationDestination(
                 icon: const Icon(Icons.games_outlined),
-                selectedIcon: const Icon(Icons.games, color: Colors.black),
+                // MODIFICATION : Icone en orange
+                selectedIcon: Icon(Icons.games, color: primaryOrange),
                 label: 'Jeu',
               ),
 
-              // Onglet Messages
+              // --- Onglet Messages ---
               NavigationDestination(
                 icon: Badge(
                   label: Text('$_messageBadgeCount'),
@@ -187,15 +191,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   label: Text('$_messageBadgeCount'),
                   isLabelVisible: _messageBadgeCount > 0,
                   backgroundColor: Colors.red,
-                  child: const Icon(Icons.chat_bubble, color: Colors.black),
+                  // MODIFICATION : Icone en orange
+                  child: Icon(Icons.chat_bubble, color: primaryOrange),
                 ),
                 label: 'Messages',
               ),
 
-              // Onglet Profil
+              // --- Onglet Profil ---
               NavigationDestination(
                 icon: const Icon(Icons.person_outline),
-                selectedIcon: const Icon(Icons.person, color: Colors.black),
+                // MODIFICATION : Icone en orange
+                selectedIcon: Icon(Icons.person, color: primaryOrange),
                 label: 'Profil',
               ),
             ],

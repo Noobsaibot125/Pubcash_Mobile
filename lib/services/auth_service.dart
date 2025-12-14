@@ -567,26 +567,35 @@ class AuthService with ChangeNotifier {
     try {
       _setLoading(true);
       
-      // On s'assure d'avoir l'ID de l'utilisateur actuel
       if (_currentUser == null || _currentUser!.id == null) {
         throw Exception("Utilisateur non identifié");
       }
 
       await _apiService.post(
-        '/auth/utilisateur/delete-account', // Note le chemin '/utilisateur/'
+        '/auth/utilisateur/delete-account',
         data: {
           'id': _currentUser!.id,
           'password': password,
-          'authProvider': authProvider // 'email' ou 'social'
+          'authProvider': authProvider
         },
       );
       
-      // Si l'API ne renvoie pas d'erreur, c'est que c'est bon.
-      // On laisse le profile_screen gérer la déconnexion via _logout()
-      
     } catch (e) {
       print("Erreur suppression compte: $e");
-      rethrow;
+      
+      // --- GESTION D'ERREUR AMÉLIORÉE ---
+      if (e is DioException) {
+        if (e.response?.statusCode == 401) {
+          // C'est ici qu'on transforme l'erreur technique en message utilisateur
+          throw Exception("Mot de passe incorrect."); 
+        } else if (e.response?.data != null && e.response?.data is Map) {
+           // On récupère le message du backend s'il existe (ex: "Utilisateur introuvable")
+           throw Exception(e.response?.data['message'] ?? "Erreur lors de la suppression.");
+        }
+      }
+      // ----------------------------------
+      
+      rethrow; // Relance l'exception propre pour l'afficher dans le SnackBar
     } finally {
       _setLoading(false);
     }
