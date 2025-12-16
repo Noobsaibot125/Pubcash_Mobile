@@ -128,4 +128,23 @@ class AppNotification {
     
     return null;
   }
+  AppNotification copyWith({
+    int? id,
+    String? type,
+    String? titre,
+    String? contenu,
+    Map<String, dynamic>? donnees,
+    bool? lu,
+    DateTime? dateCreation,
+  }) {
+    return AppNotification(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      titre: titre ?? this.titre,
+      contenu: contenu ?? this.contenu,
+      donnees: donnees ?? this.donnees,
+      lu: lu ?? this.lu,
+      dateCreation: dateCreation ?? this.dateCreation,
+    );
+  }
 }

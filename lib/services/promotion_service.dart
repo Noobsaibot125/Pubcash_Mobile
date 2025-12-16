@@ -80,20 +80,34 @@ class PromotionService {
   }
 
   // === NOUVEAU : SOUMETTRE QUIZ ===
-  Future<bool> submitQuiz(int gameId, String reponse) async {
+  Future<void> submitQuiz(int gameId, String reponse) async {
     try {
-      // Endpoint basé sur GameController.js: exports.submitQuiz
-      final response = await _apiService.post(
-        '/games/quiz/submit', // Assure-toi que c'est la bonne route dans ton router.js
-        data: {'gameId': gameId, 'reponse': reponse},
+      // 1. On récupère l'ID de l'appareil pour la sécurité
+      String? deviceId = await DeviceUtils.getDeviceId();
+
+      // 2. On l'envoie au serveur
+      await _apiService.post(
+        '/games/quiz/submit', 
+        data: {
+          'gameId': gameId, 
+          'reponse': reponse,
+          'device_id': deviceId // Ajout crucial
+        },
       );
-      return response.data['success'] == true;
+      
+      // Si pas d'erreur, c'est que c'est bon
     } catch (e) {
       print("Erreur submit quiz: $e");
-      return false;
+      
+      // Gestion spécifique de la fraude si le serveur renvoie 403 sur le quiz
+      if (e is DioException) {
+        if (e.response?.statusCode == 403) {
+          throw "DEVICE_FRAUD";
+        }
+      }
+      rethrow; // On relance l'erreur pour que l'écran puisse l'attraper
     }
   }
-
   // === NOUVEAU : HISTORIQUE DES RETRAITS ===
   Future<List<dynamic>> getWithdrawHistory() async {
     try {

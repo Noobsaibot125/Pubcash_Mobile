@@ -64,6 +64,76 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+// --- NOUVEAU : Fonction pour supprimer tout avec confirmation ---
+  Future<void> _confirmDeleteAll() async {
+    if (_notifications.isEmpty) return;
+
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Tout supprimer ?"),
+        content: const Text("Voulez-vous vraiment effacer toutes vos notifications ?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Annuler", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _isLoading = true);
+      try {
+        await _notificationService.supprimerToutesNotifications();
+        if (mounted) {
+          setState(() {
+            _notifications.clear();
+            _isLoading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Notifications supprimées")),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Erreur lors de la suppression")),
+          );
+        }
+      }
+    }
+  }
+
+  // --- NOUVEAU : Fonction pour supprimer une seule (Swipe) ---
+  Future<void> _deleteSingleNotification(int id, int index) async {
+    // 1. Suppression optimiste UI (on retire tout de suite pour la fluidité)
+    final removedItem = _notifications[index];
+    setState(() {
+      _notifications.removeAt(index);
+    });
+
+    try {
+      // 2. Appel API
+      await _notificationService.supprimerNotification(id);
+    } catch (e) {
+      // 3. Si erreur, on remet l'item (optionnel, mais propre)
+      if (mounted) {
+        setState(() {
+          _notifications.insert(index, removedItem);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Impossible de supprimer la notification")),
+        );
+      }
+    }
+  }
+
 
   String _formaterDate(DateTime date) {
     final diff = DateTime.now().difference(date);
@@ -203,7 +273,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return "$_baseUrl/uploads/$folder/$path";
   }
 
-  @override
+ @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
@@ -224,14 +294,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          // Bouton 1: Tout marquer comme lu
+          IconButton(
+            tooltip: "Tout marquer comme lu",
+            icon: const Icon(Icons.done_all, color: AppColors.primary),
+            onPressed: () async {
+              await _notificationService.marquerToutesCommeLues();
+              _chargerNotifications(reload: true);
+            },
+          ),
+          // Bouton 2: Tout supprimer (NOUVEAU)
           Padding(
-            padding: const EdgeInsets.only(right: 16.0),
+            padding: const EdgeInsets.only(right: 8.0),
             child: IconButton(
-              icon: const Icon(Icons.done_all, color: AppColors.primary),
-              onPressed: () async {
-                await _notificationService.marquerToutesCommeLues();
-                _chargerNotifications(reload: true);
-              },
+              tooltip: "Tout supprimer",
+              icon: const Icon(Icons.delete_sweep_outlined, color: Colors.red),
+              onPressed: _confirmDeleteAll,
             ),
           ),
         ],
@@ -241,9 +319,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         color: AppColors.primary,
         child: _notifications.isEmpty && !_isLoading
             ? Center(
-                child: Text(
-                  "Aucune notification",
-                  style: TextStyle(color: Colors.grey[500]),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.notifications_off_outlined, size: 60, color: Colors.grey[300]),
+                    const SizedBox(height: 10),
+                    Text(
+                      "Aucune notification",
+                      style: TextStyle(color: Colors.grey[500]),
+                    ),
+                  ],
                 ),
               )
             : ListView.separated(
@@ -252,15 +337,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   vertical: 10,
                 ),
                 itemCount: _notifications.length + (_hasMore ? 1 : 0),
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 12),
+                separatorBuilder: (context, index) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   if (index == _notifications.length) {
                     return _isLoading
                         ? const Center(
-                            child: CircularProgressIndicator(
-                              color: AppColors.primary,
-                            ),
+                            child: CircularProgressIndicator(color: AppColors.primary),
                           )
                         : TextButton(
                             onPressed: () {
@@ -270,12 +352,40 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             child: const Text("Voir plus"),
                           );
                   }
-                  return _buildNotificationCard(_notifications[index]);
+                  
+                  final notif = _notifications[index];
+
+                  // --- NOUVEAU : Dismissible pour le Swipe ---
+                  return Dismissible(
+                    // La clé doit être unique pour chaque item
+                    key: Key('notif_${notif.id}'),
+                    direction: DismissDirection.endToStart, // Swipe de droite à gauche uniquement
+                    
+                    // L'arrière-plan rouge quand on swipe
+                    background: Container(
+                      padding: const EdgeInsets.only(right: 20),
+                      alignment: Alignment.centerRight,
+                      decoration: BoxDecoration(
+                        color: Colors.red[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.delete_outline, color: Colors.red, size: 30),
+                    ),
+                    
+                    // L'action déclenchée
+                    onDismissed: (direction) {
+                      _deleteSingleNotification(notif.id, index);
+                    },
+                    
+                    // La carte normale
+                    child: _buildNotificationCard(notif),
+                  );
                 },
               ),
       ),
     );
   }
+
 
   Widget _buildNotificationCard(AppNotification notif) {
     bool hasThumbnail =

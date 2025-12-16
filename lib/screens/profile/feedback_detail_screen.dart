@@ -41,6 +41,19 @@ class _FeedbackDetailScreenState extends State<FeedbackDetailScreen> {
     super.dispose();
   }
 
+  // Fonction utilitaire pour formater l'heure style WhatsApp (HH:mm)
+  String _formatTime(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return "";
+    try {
+      final DateTime date = DateTime.parse(dateStr).toLocal();
+      final String hour = date.hour.toString().padLeft(2, '0');
+      final String minute = date.minute.toString().padLeft(2, '0');
+      return "$hour:$minute";
+    } catch (e) {
+      return "";
+    }
+  }
+
   Future<void> _fetchMessages() async {
     try {
       final messages = await _feedbackService.getFeedbackMessages(
@@ -83,7 +96,6 @@ class _FeedbackDetailScreenState extends State<FeedbackDetailScreen> {
     try {
       await _feedbackService.replyToFeedback(widget.feedbackId, message);
       _replyController.clear();
-      // Rafraichir les messages pour voir le nouveau
       await _fetchMessages();
     } catch (e) {
       if (mounted) {
@@ -116,28 +128,24 @@ class _FeedbackDetailScreenState extends State<FeedbackDetailScreen> {
       ),
       body: Column(
         children: [
-          // En-tête avec le message original si on veut, ou juste la liste
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _errorMessage != null
-                ? Center(child: Text("Erreur: $_errorMessage"))
-                : _buildMessageList(),
+                    ? Center(child: Text("Erreur: $_errorMessage"))
+                    : _buildMessageList(),
           ),
-          _buildReplyInput(),
+          // CORRECTION ICI : SafeArea empêche l'input d'être caché par le système Android
+          SafeArea(
+            child: _buildReplyInput(),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildMessageList() {
-    // On combine le message initial (si pas dans la liste retournée, mais l'API semble retourner tout l'historique)
-    // Selon le backend: GET /api/feedback/:feedbackId/messages retourne la table feedback_messages.
-    // Le message initial est aussi inséré dans feedback_messages lors de la création via le controller.
-    // Donc _messages contient tout.
-
     if (_messages.isEmpty) {
-      // Fallback si vide (ne devrait pas arriver si le message initial est inséré)
       return const Center(child: Text("Aucun message."));
     }
 
@@ -151,7 +159,6 @@ class _FeedbackDetailScreenState extends State<FeedbackDetailScreen> {
             msg['sender_type'] == 'user' ||
             msg['sender_type'] == 'utilisateur' ||
             msg['sender_type'] == 'client';
-        // Admin types: 'admin', 'superadmin', 'administrateur'
 
         return _buildMessageBubble(msg, isUser);
       },
@@ -160,13 +167,14 @@ class _FeedbackDetailScreenState extends State<FeedbackDetailScreen> {
 
   Widget _buildMessageBubble(dynamic msg, bool isMe) {
     final messageContent = msg['message'] ?? '';
-    final dateStr = msg['created_at'] ?? ''; // Format à adapter si besoin
+    final dateStr = msg['created_at'] ?? '';
+    final formattedTime = _formatTime(dateStr); // On formate l'heure ici
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.only(left: 12, right: 12, top: 8, bottom: 8),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
@@ -179,8 +187,10 @@ class _FeedbackDetailScreenState extends State<FeedbackDetailScreen> {
             bottomRight: isMe ? Radius.zero : const Radius.circular(12),
           ),
         ),
+        // Utilisation d'une Column ou d'un Stack pour le style WhatsApp
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min, // Important pour coller au contenu
           children: [
             Text(
               messageContent,
@@ -190,11 +200,16 @@ class _FeedbackDetailScreenState extends State<FeedbackDetailScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              dateStr, // Idéalement, formatez la date ici
-              style: TextStyle(
-                color: isMe ? Colors.white70 : Colors.black54,
-                fontSize: 10,
+            // Ligne pour l'heure alignée à droite
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Text(
+                formattedTime, 
+                style: TextStyle(
+                  color: isMe ? Colors.white70 : Colors.black54,
+                  fontSize: 10,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ),
           ],
@@ -205,7 +220,7 @@ class _FeedbackDetailScreenState extends State<FeedbackDetailScreen> {
 
   Widget _buildReplyInput() {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: Colors.grey[300]!)),

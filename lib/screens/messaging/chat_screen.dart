@@ -1,7 +1,12 @@
-import 'dart:io';
+import 'dart:convert'; // Pour décoder le token si besoin (ou juste simuler)
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+// IMPORT IMPORTANT POUR LE SOCKET
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+// Pour récupérer l'ID de l'utilisateur connecté (stockage local)
+import 'package:shared_preferences/shared_preferences.dart'; 
+
 import 'package:pubcash_mobile/utils/api_constants.dart';
 import '../../services/message_service.dart';
 import '../../utils/colors.dart';
@@ -31,16 +36,110 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _picker = ImagePicker();
 
+  late IO.Socket socket; // Variable pour le socket
   List<dynamic> _messages = [];
   bool _isLoading = true;
   bool _isSending = false;
   bool _showEmoji = false;
+  bool _isOnline = false;
+
   final String _baseUrl = ApiConstants.socketUrl;
 
   @override
   void initState() {
     super.initState();
     _loadMessages();
+    _connectSocket(); // On lance la connexion Socket au lieu du Timer
+  }
+
+  @override
+  void dispose() {
+    // On déconnecte proprement le socket en quittant l'écran
+    socket.dispose(); 
+    _textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // --- CONFIGURATION SOCKET.IO ---
+ void _connectSocket() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? myId = prefs.getInt('userId'); 
+    final String? myRole = prefs.getString('userRole'); 
+    
+    if (myId == null || myRole == null) return;
+
+    socket = IO.io(_baseUrl, IO.OptionBuilder()
+      .setTransports(['websocket'])
+      .disableAutoConnect() 
+      .build()
+    );
+
+    socket.connect();
+
+    socket.onConnect((_) {
+      print('✅ Connecté au serveur Socket.io');
+      socket.emit('register_chat', {
+        'userId': myId,
+        'userType': myRole 
+      });
+    });
+
+    // 4. Écouter les nouveaux messages entrants
+    socket.on('receive_message', (data) {
+      print('📩 Nouveau message reçu via Socket: $data');
+      
+      if (mounted) {
+        // --- CORRECTION ICI : Conversion en String pour la comparaison ---
+        // On convertit tout en String pour éviter les erreurs "5" (String) != 5 (Int)
+        final String incomingSenderId = data['id_expediteur'].toString();
+        final String currentContactId = widget.contactId.toString();
+        
+        final String incomingSenderType = data['type_expediteur'].toString();
+        final String currentContactType = widget.contactType.toString();
+
+        final String myIdStr = myId.toString();
+        final String myRoleStr = myRole.toString();
+
+        // Est-ce que le message vient de la personne à qui je parle ?
+        bool isFromContact = (incomingSenderId == currentContactId && incomingSenderType == currentContactType);
+        
+        // Est-ce que c'est MOI qui l'ai envoyé (depuis un autre appareil ou via l'API) ?
+        bool isFromMe = (incomingSenderId == myIdStr && incomingSenderType == myRoleStr);
+
+        print("🧐 Analyse du message :");
+        print("   - Reçu de ID: $incomingSenderId (Type: $incomingSenderType)");
+        print("   - Contact actuel ID: $currentContactId (Type: $currentContactType)");
+        print("   - Est-ce le contact ? $isFromContact");
+
+        if (isFromContact || isFromMe) {
+           setState(() {
+             _messages.add(data);
+             if (isFromContact) _isOnline = true;
+           });
+           
+           // Petit délai pour laisser le temps à la liste de se construire avant de scroller
+           Future.delayed(const Duration(milliseconds: 100), () {
+             _scrollToBottom();
+           });
+        }
+      }
+    });
+
+    socket.onDisconnect((_) => print('❌ Déconnecté du socket'));
+  }
+
+  // Fonction pour formater l'heure
+  String _formatTime(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return "";
+    try {
+      final DateTime date = DateTime.parse(dateStr).toLocal();
+      final String hour = date.hour.toString().padLeft(2, '0');
+      final String minute = date.minute.toString().padLeft(2, '0');
+      return "$hour:$minute";
+    } catch (e) {
+      return "";
+    }
   }
 
   Future<void> _loadMessages() async {
@@ -50,11 +149,30 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.contactId,
         widget.contactType,
       );
-      setState(() {
-        _messages = msgs;
-        _isLoading = false;
-      });
-      _scrollToBottom();
+
+      // Logique "En ligne" basée sur le dernier message (fallback)
+      bool onlineStatus = false;
+      if (msgs.isNotEmpty) {
+        final lastMsg = msgs.last;
+        if (lastMsg['id_expediteur'] == widget.contactId) {
+             final dateStr = lastMsg['date_envoi'];
+             if (dateStr != null) {
+               final msgDate = DateTime.parse(dateStr).toLocal();
+               if (DateTime.now().difference(msgDate).inMinutes < 5) {
+                 onlineStatus = true;
+               }
+             }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _messages = msgs;
+          _isLoading = false;
+          _isOnline = onlineStatus;
+        });
+        _scrollToBottom();
+      }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -63,7 +181,11 @@ class _ChatScreenState extends State<ChatScreen> {
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
       }
     });
   }
@@ -74,17 +196,30 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() => _isSending = true);
     try {
-      await _messageService.sendMessage(
+      // 1. Envoyer à l'API (qui va sauvegarder en BDD et émettre le socket à l'autre)
+      final response = await _messageService.sendMessage(
         receiverId: widget.contactId,
         receiverType: widget.contactType,
         content: text,
       );
+      
       _textController.clear();
-      await _loadMessages();
+      
+      // 2. Ajouter manuellement le message à notre liste locale
+      // (Car le socket "receive_message" est envoyé au DESTINATAIRE, pas forcément à l'expéditeur sauf si tu l'as codé ainsi)
+      // Mais ici, pour être fluide, on l'ajoute direct.
+      
+      // On peut récupérer l'objet complet si ton API le renvoie, sinon on le construit
+      // Supposons que ton API renvoie { message: '...', messageId: 123, dateEnvoi: '...' }
+      // Il faut adapter selon ce que ton API `sendMessage` retourne.
+      // Si `sendMessage` est void dans ton service, on recharge tout :
+      await _loadMessages(); 
+      
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text("Erreur d'envoi")));
+      }
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -102,12 +237,12 @@ class _ChatScreenState extends State<ChatScreen> {
         content: "",
         imagePath: image.path,
       );
-      await _loadMessages();
+      await _loadMessages(); 
     } catch (e) {
-      print("Erreur upload image: $e");
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Erreur d'envoi image")));
+      }
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
@@ -164,17 +299,19 @@ class _ChatScreenState extends State<ChatScreen> {
                         fontWeight: FontWeight.w600),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const Text(
-                    "En ligne",
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  Text(
+                    _isOnline ? "En ligne" : "Hors ligne", 
+                    style: TextStyle(
+                      color: _isOnline ? const Color.fromARGB(255, 128, 255, 132) : Colors.white70, 
+                      fontSize: 12,
+                      fontWeight: _isOnline ? FontWeight.bold : FontWeight.normal
+                    ),
                   ),
                 ],
               ),
             ),
           ],
         ),
-        // ACTIONS SUPPRIMÉES ICI (Appel, Vidéo, Menu)
-        actions: [], 
       ),
       body: Column(
         children: [
@@ -196,6 +333,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         final msg = _messages[i];
                         final isThem = msg['id_expediteur'] == widget.contactId &&
                             msg['type_expediteur'] == widget.contactType;
+                        
+                        final dateStr = msg['date_envoi']; 
+                        final formattedTime = _formatTime(dateStr);
 
                         return Align(
                           alignment: isThem
@@ -203,7 +343,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               : Alignment.centerRight,
                           child: Container(
                             margin: const EdgeInsets.symmetric(vertical: 4),
-                            padding: const EdgeInsets.all(4),
+                            padding: const EdgeInsets.only(left: 8, right: 8, top: 4, bottom: 4),
                             decoration: BoxDecoration(
                               color: isThem ? Colors.white : AppColors.primary,
                               borderRadius: BorderRadius.only(
@@ -225,11 +365,9 @@ class _ChatScreenState extends State<ChatScreen> {
                               ],
                             ),
                             constraints: BoxConstraints(
-                                maxWidth:
-                                    MediaQuery.of(context).size.width * 0.75),
+                                maxWidth: MediaQuery.of(context).size.width * 0.75),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.all(4.0),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
@@ -253,7 +391,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                                           color: Colors.black12,
                                                           child: const Center(
                                                               child:
-                                                                  CircularProgressIndicator())),
+                                                                  CircularProgressIndicator()),
+                                                        ),
                                           errorBuilder: (ctx, err, stack) =>
                                               const Icon(Icons.broken_image),
                                         ),
@@ -261,7 +400,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     )
                                   else
                                     Padding(
-                                      padding: const EdgeInsets.all(4.0),
+                                      padding: const EdgeInsets.only(bottom: 4.0),
                                       child: Text(
                                         msg['contenu'] ?? '',
                                         style: TextStyle(
@@ -272,6 +411,18 @@ class _ChatScreenState extends State<ChatScreen> {
                                         ),
                                       ),
                                     ),
+                                  Align(
+                                    alignment: Alignment.bottomRight,
+                                    child: Text(
+                                      formattedTime,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: isThem 
+                                          ? Colors.grey[600] 
+                                          : Colors.white70,
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -282,12 +433,9 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
 
-          // ZONE DE SAISIE CORRIGÉE
-          // Utilisation de SafeArea pour gérer automatiquement le bas de l'écran (barre système Android / Home bar iOS)
           SafeArea(
             child: Container(
-              // Suppression du padding bottom fixe (25) qui causait le problème
-              padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 8), 
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), 
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -372,7 +520,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     ],
                   ),
                   
-                  // PICKER EMOJI
                   if (_showEmoji)
                     SizedBox(
                       height: 270,
@@ -394,9 +541,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                     : 1.0),
                             backgroundColor: const Color(0xFFF2F2F2),
                           ),
-                          categoryViewConfig: CategoryViewConfig(
+                          categoryViewConfig: const CategoryViewConfig(
                             initCategory: Category.RECENT,
-                            backgroundColor: const Color(0xFFF2F2F2),
+                            backgroundColor: Color(0xFFF2F2F2),
                             indicatorColor: AppColors.primary,
                             iconColor: Colors.grey,
                             iconColorSelected: AppColors.primary,

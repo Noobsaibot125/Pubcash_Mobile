@@ -322,16 +322,30 @@ class NotificationService {
     await getUnreadCount();
   }
 
+/// Supprimer toutes les notifications
+  Future<void> supprimerToutesNotifications() async {
+    try {
+      // Adapte l'endpoint selon ton backend (ex: /notifications/tout ou delete sur /notifications)
+      await _apiService.delete('/notifications/toutes'); 
+      
+      // On met à jour le compteur à 0
+      _unreadCountController.add(0);
+    } catch (e) {
+      print('❌ Erreur suppression totale: $e');
+      throw e; // On renvoie l'erreur pour gérer l'UI
+    }
+  }
+
+  // --- RAPPEL : TU AS DÉJÀ CETTE MÉTHODE, GARDE-LA ---
   /// Supprimer une notification
   Future<void> supprimerNotification(int notificationId) async {
     try {
       await _apiService.delete('/notifications/$notificationId');
-      await refreshUnreadCount(); // On met à jour au cas où
+      await refreshUnreadCount(); 
     } catch (e) {
       print('❌ Erreur suppression notification: $e');
     }
   }
-
   /// Afficher une notification locale manuelle (Public)
   Future<void> showLocalNotification({
     required String title,

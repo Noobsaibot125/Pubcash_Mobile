@@ -160,17 +160,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
- void _openVideoPlayer(Promotion promo) {
+  void _openVideoPlayer(Promotion promo) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => FullScreenVideoScreen(
           promotion: promo,
           onVideoViewed: () {
-            // Optimistic UI : On l'enlève visuellement tout de suite
+            // Optimistic UI : Suppression visuelle immédiate (très important pour le cas de la fraude)
             if (mounted) {
               setState(() {
                 _promotions.removeWhere((p) => p.id == promo.id);
+                // Mise à jour du compteur pour les autres écrans si nécessaire
                 widget.onVideoCountChanged?.call(_promotions.length);
               });
             }
@@ -178,21 +179,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ),
     ).then((result) async {
-      // --- C'EST ICI QUE CA SE JOUE ---
-      // Si result == true, c'est que la vidéo a été validée avec succès.
+      // --- MODIFICATION ICI : Gestion du retour ---
+      
+      // Si result == true, cela signifie qu'une action importante a eu lieu (vue validée OU fraude détectée/annulée)
       if (result == true) {
-        print("✅ Vidéo validée, rechargement complet...");
+        print("✅ Vidéo traitée (Validée ou Annulée), rechargement...");
         
-        // Petit délai pour être sûr que la BDD est à jour côté serveur
-        // (parfois la transaction prend 100-200ms)
-        await Future.delayed(const Duration(milliseconds: 500));
-        
-        // On force la mise à jour du badge notification manuellement pour l'UX
+        // On force la mise à jour du badge notification
         NotificationService().refreshUnreadCount();
+
+        // ⚠️ CRITIQUE : On attend un peu plus longtemps (1 seconde) avant de recharger les données serveur.
+        // Cela laisse le temps à l'API "cancelPromotion" (cas fraude) de bien finir son travail en BDD.
+        // Sinon, le serveur risque de renvoyer la vidéo qu'on vient de supprimer localement.
+        await Future.delayed(const Duration(milliseconds: 1000));
+      } else {
+        // Si retour normal (fermeture croix), on recharge vite fait
+         await Future.delayed(const Duration(milliseconds: 200));
       }
       
-      // Dans tous les cas, on recharge les données (Solde, Points, Liste)
-      _loadData(); 
+      // Dans tous les cas, on recharge les données pour avoir le Solde à jour
+      if(mounted) _loadData(); 
     });
   }
 
