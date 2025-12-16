@@ -4,9 +4,10 @@ import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/feedback_service.dart';
 import '../../utils/colors.dart';
+import 'feedback_detail_screen.dart';
 
 // Si vous n'avez pas url_launcher, vous pouvez retirer les onTap ou ajouter le package plus tard
-// import 'package:url_launcher/url_launcher.dart'; 
+// import 'package:url_launcher/url_launcher.dart';
 
 class ContactScreen extends StatefulWidget {
   const ContactScreen({Key? key}) : super(key: key);
@@ -37,7 +38,7 @@ class _ContactScreenState extends State<ContactScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authService = Provider.of<AuthService>(context, listen: false);
       final user = authService.currentUser;
-      
+
       if (user != null) {
         String fullName = "";
         if (user.prenom != null) fullName += user.prenom!;
@@ -131,7 +132,7 @@ class _ContactScreenState extends State<ContactScreen>
             child: TabBar(
               controller: _tabController,
               // Réduit le padding vertical interne des labels pour réduire la hauteur du "bouton"
-              labelPadding: const EdgeInsets.symmetric(vertical: 0), 
+              labelPadding: const EdgeInsets.symmetric(vertical: 0),
               indicator: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(25),
@@ -146,8 +147,18 @@ class _ContactScreenState extends State<ContactScreen>
               labelColor: Colors.black,
               unselectedLabelColor: Colors.grey,
               tabs: const [
-                Tab(child: Text('Nous joindre', style: TextStyle(fontWeight: FontWeight.w600))),
-                Tab(child: Text('Un message', style: TextStyle(fontWeight: FontWeight.w600))),
+                Tab(
+                  child: Text(
+                    'Nous joindre',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Tab(
+                  child: Text(
+                    'Un message',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
               ],
             ),
           ),
@@ -157,7 +168,7 @@ class _ContactScreenState extends State<ContactScreen>
               children: [
                 // Tab "Nous joindre" - Informations KKS
                 _buildContactInfo(),
-                
+
                 // Tab "Un message" - Le formulaire
                 _buildMessageForm(),
               ],
@@ -183,7 +194,11 @@ class _ContactScreenState extends State<ContactScreen>
                 color: AppColors.light,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.business, size: 40, color: AppColors.primary),
+              child: const Icon(
+                Icons.business,
+                size: 40,
+                color: AppColors.primary,
+              ),
             ),
           ),
           const SizedBox(height: 15),
@@ -207,7 +222,7 @@ class _ContactScreenState extends State<ContactScreen>
             title: "Adresse",
             subtitle: "Mandela, Abidjan, Cocody, Angré",
           ),
-          
+
           const Divider(height: 20),
 
           // Téléphone
@@ -235,7 +250,7 @@ class _ContactScreenState extends State<ContactScreen>
             subtitle: "https://kks-technologies.com",
             isLink: true,
           ),
-          
+
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(12),
@@ -253,17 +268,17 @@ class _ContactScreenState extends State<ContactScreen>
                 ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
   }
 
   Widget _buildInfoTile({
-    required IconData icon, 
-    required String title, 
+    required IconData icon,
+    required String title,
     required String subtitle,
-    bool isLink = false
+    bool isLink = false,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,7 +301,7 @@ class _ContactScreenState extends State<ContactScreen>
                 style: const TextStyle(
                   color: Colors.grey,
                   fontSize: 12,
-                  fontWeight: FontWeight.bold
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 4),
@@ -301,7 +316,7 @@ class _ContactScreenState extends State<ContactScreen>
               ),
             ],
           ),
-        )
+        ),
       ],
     );
   }
@@ -482,6 +497,18 @@ class FeedbackHistoryScreen extends StatelessWidget {
               final item = feedbacks[index];
               final dateStr = item['created_at'];
               return ListTile(
+                onTap: () {
+                  // Navigation vers les détails du feedback pour répondre
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => FeedbackDetailScreen(
+                        feedbackId: item['id'],
+                        initialMessage: item['message'] ?? '',
+                        initialDate: dateStr,
+                      ),
+                    ),
+                  );
+                },
                 contentPadding: EdgeInsets.zero,
                 title: Text(
                   item['message'] ?? '...',
