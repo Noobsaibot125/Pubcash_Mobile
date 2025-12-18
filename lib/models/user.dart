@@ -1,3 +1,5 @@
+import '../utils/api_constants.dart';
+
 class User {
   final int? id;
   final String nomUtilisateur;
@@ -11,23 +13,23 @@ class User {
   final String? genre;
   final String? photoUrl;
   final String? imageBackground;
-  
+
   // Champs pour la logique sociale
   final String? idGoogle;
   final String? idFacebook;
-  
+
   final String? codeParrainage;
   final int points;
   final double solde;
   final List<dynamic>? referrals;
-  
+
   // Nouveau champ (optionnel mais utile vu que le backend l'envoie)
   final String? pushNotification;
 
   // ⚠️ IMPORTANT : Change ceci selon ton environnement
   // En local : "http://192.168.1.15:5000"
   // En production : "https://pub-cash.com"
-  static const String baseUrl = "https://pub-cash.com";
+  static String get baseUrl => ApiConstants.socketUrl;
 
   User({
     this.id,
@@ -66,7 +68,8 @@ class User {
       prenom: _safeString(json['prenom']),
 
       // Gestion intelligente : backend envoie parfois 'commune_choisie', parfois 'commune'
-      commune: _safeString(json['commune_choisie']) ?? _safeString(json['commune']),
+      commune:
+          _safeString(json['commune_choisie']) ?? _safeString(json['commune']),
 
       ville: _safeString(json['ville']),
       dateNaissance: _safeString(json['date_naissance']),
@@ -76,28 +79,30 @@ class User {
       // --- CONSTRUCTION DES URLS ---
       // Si l'URL commence par http, on la garde, sinon on construit le chemin complet
       photoUrl: _constructFullUrl(
-        json['photo_profil'], 
-        json['profile_image_url'], 
-        'profile'
+        json['photo_profil'],
+        json['profile_image_url'],
+        'profile',
       ),
-      
-      imageBackground: _constructFullUrl(
-        json['image_background'], 
-        json['background_image_url'], 
-        'background'
-      ),
-      // -----------------------------
 
+      imageBackground: _constructFullUrl(
+        json['image_background'],
+        json['background_image_url'],
+        'background',
+      ),
+
+      // -----------------------------
       idGoogle: _safeString(json['id_google']),
       idFacebook: _safeString(json['id_facebook']),
       codeParrainage: _safeString(json['code_parrainage']),
       pushNotification: _safeString(json['push_notification']),
 
       points: _safeInt(json['points']),
-      
+
       // Gère 'remuneration_utilisateur' ou 'solde'
-      solde: _safeDouble(json['remuneration_utilisateur']) ?? 
-             _safeDouble(json['solde']) ?? 0.0,
+      solde:
+          _safeDouble(json['remuneration_utilisateur']) ??
+          _safeDouble(json['solde']) ??
+          0.0,
 
       referrals: json['referrals'] ?? [],
     );
@@ -122,7 +127,11 @@ class User {
   }
 
   // --- FONCTION UTILITAIRE POUR RECONSTRUIRE L'URL ---
-  static String? _constructFullUrl(dynamic shortName, dynamic fullUrl, String folder) {
+  static String? _constructFullUrl(
+    dynamic shortName,
+    dynamic fullUrl,
+    String folder,
+  ) {
     // 1. Si on a déjà une URL complète qui vient de Facebook/Google ou du backend
     if (fullUrl != null && fullUrl.toString().startsWith('http')) {
       return fullUrl.toString();
@@ -131,17 +140,17 @@ class User {
     if (shortName != null && shortName.toString().startsWith('http')) {
       return shortName.toString();
     }
-    
+
     // 2. Sinon, on récupère le nom du fichier (ex: image.jpg)
     String? filename = _safeString(shortName);
-    
+
     // 3. On construit l'URL complète manuellement
     if (filename != null && filename.isNotEmpty) {
       // Sécurité pour les chemins Windows
       filename = filename.replaceAll('\\', '/');
-      return "$baseUrl/uploads/$folder/$filename"; 
+      return "$baseUrl/uploads/$folder/$filename";
     }
-    
+
     return null;
   }
 

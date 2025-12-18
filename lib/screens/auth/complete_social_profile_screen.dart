@@ -136,13 +136,25 @@ class _CompleteSocialProfileScreenState
       final authService = Provider.of<AuthService>(context, listen: false);
 
       try {
-        // 1. Enregistrement du profil
-        await authService.completeProfile(
-          commune: _selectedCommune!,
-          dateNaissance: _dateController.text,
-          contact: _contactController.text,
-          genre: _selectedGenre,
-        );
+        // DETERMINATION DU FLUX : Inscription Sociale Atomique (Nouveau) vs Update Profil (Existant)
+        if (authService.pendingSocialData != null) {
+          print("🚀 Flux : Inscription Sociale Atomique...");
+          await authService.registerSocial(
+            commune: _selectedCommune!,
+            dateNaissance: _dateController.text,
+            contact: _contactController.text,
+            genre: _selectedGenre,
+          );
+        } else {
+          print("📝 Flux : Mise à jour de profil classique...");
+          // 1. Enregistrement du profil
+          await authService.completeProfile(
+            commune: _selectedCommune!,
+            dateNaissance: _dateController.text,
+            contact: _contactController.text,
+            genre: _selectedGenre,
+          );
+        }
 
         // ============================================================
         // ✅ CORRECTION AJOUTÉE ICI : ENVOI DU TOKEN FCM
@@ -159,16 +171,15 @@ class _CompleteSocialProfileScreenState
 
         // 2. Navigation vers l'accueil
         if (mounted) {
-          Navigator.of(context).pushNamedAndRemoveUntil(
-            '/home', 
-            (route) => false 
-          );
+          Navigator.of(
+            context,
+          ).pushNamedAndRemoveUntil('/home', (route) => false);
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erreur: ${e.toString()}')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Erreur: ${e.toString()}')));
         }
       }
     }

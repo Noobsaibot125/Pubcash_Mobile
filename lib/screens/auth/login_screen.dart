@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart'; // <--- IMPORTANT : Ajouter cet import
 import 'forgot_password_screen.dart';
 import '../../services/auth_service.dart';
-import '../../services/notification_service.dart'; // <--- N'OUBLIE PAS L'IMPORT ICI
+import '../../services/notification_service.dart';
 import '../../utils/colors.dart';
 import '../../utils/validators.dart';
 import '../../widgets/custom_button.dart';
@@ -24,7 +25,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-bool _obscurePassword = true;
+  bool _obscurePassword = true;
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -32,27 +34,171 @@ bool _obscurePassword = true;
     super.dispose();
   }
 
+  // --- NOUVELLE FONCTION : POPUP COMPTE BLOQUÉ ---
+  void _showBlockedPopup(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // L'utilisateur doit cliquer sur OK ou le lien
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.block, color: Colors.red),
+              SizedBox(width: 10),
+              Text("Compte Bloqué"),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Votre compte a été suspendu par l'administrateur. Pour plus d'informations, veuillez ",
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 5),
+                // --- LE LIEN CLIQUABLE ---
+                GestureDetector(
+                  onTap: () async {
+                    // Préparation de l'email
+                    final Uri emailLaunchUri = Uri(
+                      scheme: 'mailto',
+                      path: 'redfieldluise@gmail.com',
+                      query:
+                          'subject=Réclamation Compte Bloqué&body=Bonjour, mon compte est bloqué. Voici mon identifiant : ${_emailController.text}',
+                    );
+
+                    try {
+                      await launchUrl(emailLaunchUri);
+                    } catch (e) {
+                      print("Impossible d'ouvrir l'app mail : $e");
+                      // Fallback si l'app mail ne s'ouvre pas
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            "Impossible d'ouvrir l'application mail.",
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text(
+                    "contacter le support",
+                    style: TextStyle(
+                      color: Colors.blue, // Couleur du lien
+                      fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.underline, // Souligné
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                const Text("par email.", style: TextStyle(fontSize: 16)),
+                const SizedBox(height: 15),
+                // Affichage de l'email en clair au cas où
+                SelectableText(
+                  "Email: redfieldluise@gmail.com",
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop(); // Fermer le popup
+              },
+              child: const Text("Fermer"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- NOUVELLE FONCTION : POPUP D'ERREUR STYLÉ ---
+  void _showErrorDialog(BuildContext context, String title, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.wifi_off_rounded,
+                  size: 50,
+                  color: Colors.redAccent,
+                ),
+              ),
+              const SizedBox(height: 15),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, color: Colors.black54),
+              ),
+              const SizedBox(height: 25),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text(
+                    "D'accord",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       try {
-        // 1. Connexion
-        await Provider.of<AuthService>(context, listen: false)
-            .login(_emailController.text.trim(), _passwordController.text);
-        
-        // ✅ 2. SAUVEGARDE TOKEN FCM (CRUCIAL)
-        // Maintenant qu'on a un token d'auth, on envoie le token FCM
+        await Provider.of<AuthService>(
+          context,
+          listen: false,
+        ).login(_emailController.text.trim(), _passwordController.text);
+
         try {
           await NotificationService().forceRefreshToken();
-          print("✅ Token FCM mis à jour après login");
         } catch (e) {
           print("⚠️ Erreur mise à jour FCM: $e");
         }
 
-        // 3. Navigation
         if (mounted) {
           Navigator.of(context).pushReplacementNamed('/home');
         }
-        
       } on IncompleteProfileException {
         if (mounted) {
           Navigator.push(
@@ -63,16 +209,42 @@ bool _obscurePassword = true;
           );
         }
       } catch (e) {
-        final msg = AuthService.getErrorMessage(e);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(msg), backgroundColor: Colors.red),
-          );
+        // --- CORRECTION ICI ---
+
+        // 1. On récupère le message lisible (celui qui s'affiche dans le rouge sur ton écran)
+        final String readableMessage = AuthService.getErrorMessage(e);
+
+        // 2. On garde l'erreur brute au cas où le code technique s'y trouve
+        final String rawError = e.toString();
+
+        // 3. On vérifie LES DEUX (Le code technique OU le mot clé dans le message lisible)
+        if (rawError.contains("ACCOUNT_BLOCKED") ||
+            readableMessage.toLowerCase().contains("bloqué") ||
+            readableMessage.toLowerCase().contains("suspendu")) {
+          // C'est un blocage -> On affiche le popup
+          if (mounted) _showBlockedPopup(context);
+        } else if (readableMessage.toLowerCase().contains("connexion") ||
+            readableMessage.toLowerCase().contains("internet") ||
+            readableMessage.toLowerCase().contains("réseau")) {
+          // C'est une erreur réseau -> Dialogue stylé
+          if (mounted)
+            _showErrorDialog(context, "Erreur de connexion", readableMessage);
+        } else {
+          // C'est une autre erreur (mot de passe faux, etc.) -> On affiche le SnackBar rouge
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(readableMessage),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       }
     }
   }
 
+  // ... (Le reste de votre build reste identique, copiez le code ci-dessous si besoin)
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
@@ -90,7 +262,6 @@ bool _obscurePassword = true;
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Logo
                     Center(
                       child: Image.asset('assets/images/logo.png', height: 100),
                     ),
@@ -115,43 +286,30 @@ bool _obscurePassword = true;
                     ),
                     const SizedBox(height: 40),
 
-                   CustomTextField(
-  hintText: "Email ou Numéro",
-  prefixIcon: Icons.person_outline, // Icône plus générique que l'email
-  controller: _emailController, // Tu peux garder ce nom ou le renommer _identifierController
-  keyboardType: TextInputType.emailAddress, // Ce clavier affiche le @ et les chiffres, c'est parfait pour les deux
-  validator: (value) {
-    if (value == null || value.isEmpty) {
-      return "Veuillez entrer votre email ou numéro";
-    }
+                    CustomTextField(
+                      hintText: "Email ou Numéro",
+                      prefixIcon: Icons.person_outline,
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return "Veuillez entrer votre email ou numéro";
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
 
-    // 1. Vérification Email (Regex standard)
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    // 2. Vérification Numéro (Uniquement des chiffres, min 10 caractères)
-    final phoneRegex = RegExp(r'^[0-9]{10,}$'); 
-
-    // Si ce n'est NI un email NI un numéro valide
-    if (!emailRegex.hasMatch(value) && !phoneRegex.hasMatch(value)) {
-      return "Entrez un email valide ou un numéro (ex: 0707...)";
-    }
-    
-    return null;
-  },
-),
-                  const SizedBox(height: 20), // Un peu d'espace
-
-                    // 2. REMPLACE LE CHAMP MOT DE PASSE PAR CELUI-CI
                     CustomTextField(
                       hintText: "Mot de passe",
                       prefixIcon: Icons.lock_outline,
                       controller: _passwordController,
-                      obscureText: _obscurePassword, // Utilise la variable
+                      obscureText: _obscurePassword,
                       validator: Validators.validatePassword,
-                      // Ajout de l'icône "Oeil" à droite
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword 
-                              ? Icons.visibility_outlined 
+                          _obscurePassword
+                              ? Icons.visibility_outlined
                               : Icons.visibility_off_outlined,
                           color: Colors.grey,
                         ),
@@ -168,8 +326,10 @@ bool _obscurePassword = true;
                       child: TextButton(
                         onPressed: () {
                           Navigator.push(
-                            context, 
-                            MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ForgotPasswordScreen(),
+                            ),
                           );
                         },
                         child: const Text(
@@ -197,66 +357,91 @@ bool _obscurePassword = true;
                       onFacebookTap: () async {
                         try {
                           await authService.loginWithFacebook();
-                          
-                          // ✅ Mettre à jour le token FCM après login FB
                           await NotificationService().forceRefreshToken();
-
-                          if (mounted) {
+                          if (mounted)
                             Navigator.of(context).pushReplacementNamed('/home');
-                          }
-                        } on IncompleteProfileException {
-                          if (mounted) {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const CompleteSocialProfileScreen(),
-                              ),
-                            );
-                          }
                         } catch (e) {
-                          if (mounted) {
+                          // --- CORRECTION APPLIQUÉE ICI ---
+                          final String readableMessage =
+                              AuthService.getErrorMessage(e);
+                          final String rawError = e.toString();
+
+                          if (rawError.contains("ACCOUNT_BLOCKED") ||
+                              readableMessage.toLowerCase().contains(
+                                "bloqué",
+                              ) ||
+                              readableMessage.toLowerCase().contains(
+                                "suspendu",
+                              )) {
+                            if (mounted) _showBlockedPopup(context);
+                          } else if (readableMessage.toLowerCase().contains(
+                                "connexion",
+                              ) ||
+                              readableMessage.toLowerCase().contains(
+                                "internet",
+                              ) ||
+                              readableMessage.toLowerCase().contains(
+                                "réseau",
+                              )) {
+                            if (mounted)
+                              _showErrorDialog(
+                                context,
+                                "Erreur de connexion",
+                                readableMessage,
+                              );
+                          } else if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Erreur connexion: ${e.toString()}'),
+                                content: Text(readableMessage),
                                 backgroundColor: Colors.red,
                               ),
                             );
                           }
                         }
                       },
-                    onGoogleTap: () async {
-                        print("🔵 Clic sur Google Login");
+                      onGoogleTap: () async {
                         try {
                           await authService.loginWithGoogle();
-                          print("🟢 Login Google terminé");
-
-                          // ✅ Mettre à jour le token FCM après login Google
                           await NotificationService().forceRefreshToken();
-
-                          if (mounted) {
+                          if (mounted)
                             Navigator.of(context).pushReplacementNamed('/home');
-                          }
-                        } on IncompleteProfileException {
-                          print("🟠 Profil incomplet -> Redirection");
-                          if (mounted) {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const CompleteSocialProfileScreen(),
-                              ),
-                            );
-                          }
                         } catch (e) {
-                          // ✅ CORRECTION ICI : Gestion de l'annulation
-                          if (e.toString().contains('GOOGLE_CANCELED')) {
-                            print("L'utilisateur a annulé la connexion Google (Pas d'erreur affichée)");
-                            return; // ON ARRÊTE TOUT, ON NE FAIT RIEN
-                          }
+                          if (e.toString().contains('GOOGLE_CANCELED')) return;
 
-                          print("🔴 Erreur Google Login: $e");
-                          if (mounted) {
+                          // --- CORRECTION APPLIQUÉE ICI ---
+                          final String readableMessage =
+                              AuthService.getErrorMessage(e);
+                          final String rawError = e.toString();
+
+                          if (rawError.contains("ACCOUNT_BLOCKED") ||
+                              readableMessage.toLowerCase().contains(
+                                "bloqué",
+                              ) ||
+                              readableMessage.toLowerCase().contains(
+                                "suspendu",
+                              )) {
+                            if (mounted) _showBlockedPopup(context);
+                          } else if (readableMessage.toLowerCase().contains(
+                                "connexion",
+                              ) ||
+                              readableMessage.toLowerCase().contains(
+                                "internet",
+                              ) ||
+                              readableMessage.toLowerCase().contains(
+                                "réseau",
+                              )) {
+                            if (mounted)
+                              _showErrorDialog(
+                                context,
+                                "Erreur de connexion",
+                                readableMessage,
+                              );
+                          } else if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+                              SnackBar(
+                                content: Text(readableMessage),
+                                backgroundColor: Colors.red,
+                              ),
                             );
                           }
                         }

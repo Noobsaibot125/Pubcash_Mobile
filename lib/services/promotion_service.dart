@@ -87,18 +87,18 @@ class PromotionService {
 
       // 2. On l'envoie au serveur
       await _apiService.post(
-        '/games/quiz/submit', 
+        '/games/quiz/submit',
         data: {
-          'gameId': gameId, 
+          'gameId': gameId,
           'reponse': reponse,
-          'device_id': deviceId // Ajout crucial
+          'device_id': deviceId, // Ajout crucial
         },
       );
-      
+
       // Si pas d'erreur, c'est que c'est bon
     } catch (e) {
       print("Erreur submit quiz: $e");
-      
+
       // Gestion spécifique de la fraude si le serveur renvoie 403 sur le quiz
       if (e is DioException) {
         if (e.response?.statusCode == 403) {
@@ -108,6 +108,7 @@ class PromotionService {
       rethrow; // On relance l'erreur pour que l'écran puisse l'attraper
     }
   }
+
   // === NOUVEAU : HISTORIQUE DES RETRAITS ===
   Future<List<dynamic>> getWithdrawHistory() async {
     try {
@@ -156,7 +157,7 @@ class PromotionService {
     }
   }
 
-Future<int> markPromotionAsViewed(int promoId) async {
+  Future<int> markPromotionAsViewed(int promoId) async {
     try {
       String? deviceId = await DeviceUtils.getDeviceId();
 
@@ -165,13 +166,12 @@ Future<int> markPromotionAsViewed(int promoId) async {
         '${ApiConstants.promotions}/$promoId/view',
         data: {'device_id': deviceId},
       );
-      
+
       print("Vue validée avec succès.");
-      
+
       // On récupère le montant envoyé par le backend (étape 1)
       // Si c'est null, on met 0 par sécurité
       return response.data['montant'] ?? 0;
-
     } catch (e) {
       print("Erreur validation vue: $e");
 
@@ -208,25 +208,37 @@ Future<int> markPromotionAsViewed(int promoId) async {
   }
 
   // === NOUVEAU : VÉRIFIER SI L'UTILISATEUR A DÉJÀ COMMENTÉ ===
- Future<bool> hasComment(int promotionId) async {
-  try {
-    final response = await _apiService.get(
-      '${ApiConstants.promotions}/$promotionId/hasComment',
-    );
-    
-    // --- DEBUG LOGS (Regarde ta console Flutter quand tu ouvres la page) ---
-    print("🔍 CHECK COMMENTAIRE (ID: $promotionId) : ${response.data}");
-    
-    // On gère le cas où le backend renvoie true, "true", 1, ou "1"
-    final val = response.data['hasComment'];
-    if (val == true || val.toString().toLowerCase() == 'true' || val == 1) {
-      return true;
+  Future<bool> hasComment(int promotionId) async {
+    try {
+      final response = await _apiService.get(
+        '${ApiConstants.promotions}/$promotionId/hasComment',
+      );
+
+      // --- DEBUG LOGS (Regarde ta console Flutter quand tu ouvres la page) ---
+      print("🔍 CHECK COMMENTAIRE (ID: $promotionId) : ${response.data}");
+
+      // On gère le cas où le backend renvoie true, "true", 1, ou "1"
+      final val = response.data['hasComment'];
+      if (val == true || val.toString().toLowerCase() == 'true' || val == 1) {
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      print("❌ Erreur hasComment service: $e");
+      return false;
     }
-    
-    return false;
-  } catch (e) {
-    print("❌ Erreur hasComment service: $e");
-    return false; 
   }
-}
+
+  // === NOUVEAU : CONVERTIR POINTS ===
+  Future<void> convertPoints({required int points, required int amount}) async {
+    try {
+      await _apiService.post(
+        '/promotions/utilisateur/convertir-points',
+        data: {'points': points, 'amount': amount},
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
 }

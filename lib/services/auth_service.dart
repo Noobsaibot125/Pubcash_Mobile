@@ -30,6 +30,7 @@ class AuthService with ChangeNotifier {
   bool _isLoading = false;
   String? _token;
   bool _requiresProfileCompletion = false;
+  Map<String, dynamic>? _pendingSocialData;
 
   // Verrou pour éviter les boucles de rafraîchissement infinies
   bool _isRefreshing = false;
@@ -42,6 +43,7 @@ class AuthService with ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _token != null;
   bool get requiresProfileCompletion => _requiresProfileCompletion;
+  Map<String, dynamic>? get pendingSocialData => _pendingSocialData;
   bool get showBalance => _showBalance;
 
   // --- ACTIONS UI ---
@@ -151,35 +153,41 @@ class AuthService with ChangeNotifier {
     }
   }
 
-Future<void> loginWithGoogle() async {
+  Future<void> loginWithGoogle() async {
     try {
       _setLoading(true);
+
+      // --- CORRECTION MAJEURE ICI ---
+      // On force la déconnexion locale d'abord.
+      // Cela oblige Google à ré-afficher la fenêtre de choix de compte
+      // même si l'utilisateur avait déjà cliqué avant.
+      await _googleSignIn.signOut();
+      // -----------------------------
+
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
+
       if (googleUser == null) {
-        throw Exception('GOOGLE_CANCELED'); 
+        throw Exception('GOOGLE_CANCELED');
       }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
       final response = await _apiService.post(
         ApiConstants.googleAuth,
         data: {'accessToken': googleAuth.accessToken},
       );
       await _handleAuthResponse(response.data);
-
     } on DioException catch (e) {
-      // --- CAPTURE SPECIFIC BACKEND MESSAGE ---
       if (e.response != null && e.response!.data is Map) {
         final data = e.response!.data as Map;
         if (data.containsKey('message')) {
-           // Throw the specific message (e.g., "Votre compte a été suspendu...")
-           throw Exception(data['message']); 
+          // Si le backend renvoie "Compte bloqué", on lève l'exception ici
+          throw Exception(data['message']);
         }
       }
-      // Fallback for other Dio errors
       throw Exception("Erreur de connexion avec Google.");
     } catch (e) {
-      rethrow; 
+      rethrow;
     } finally {
       _setLoading(false);
     }
@@ -188,6 +196,13 @@ Future<void> loginWithGoogle() async {
   Future<void> loginWithFacebook() async {
     try {
       _setLoading(true);
+
+      // --- CORRECTION MAJEURE ICI ---
+      // Pareil pour Facebook, on déconnecte pour éviter qu'il reprenne
+      // le token précédent sans demander à l'utilisateur.
+      await FacebookAuth.instance.logOut();
+      // -----------------------------
+
       final LoginResult result = await FacebookAuth.instance.login();
       if (result.status == LoginStatus.success) {
         final AccessToken accessToken = result.accessToken!;
@@ -197,16 +212,15 @@ Future<void> loginWithGoogle() async {
         );
         await _handleAuthResponse(response.data);
       } else if (result.status == LoginStatus.cancelled) {
-         throw Exception('FACEBOOK_CANCELED');
+        throw Exception('FACEBOOK_CANCELED');
       } else {
-         throw Exception('Erreur connexion Facebook: ${result.message}');
+        throw Exception('Erreur connexion Facebook: ${result.message}');
       }
     } on DioException catch (e) {
-      // --- CAPTURE SPECIFIC BACKEND MESSAGE ---
       if (e.response != null && e.response!.data is Map) {
         final data = e.response!.data as Map;
         if (data.containsKey('message')) {
-           throw Exception(data['message']);
+          throw Exception(data['message']);
         }
       }
       throw Exception("Erreur de connexion avec Facebook.");
@@ -216,7 +230,6 @@ Future<void> loginWithGoogle() async {
       _setLoading(false);
     }
   }
-
   // =========================================================
   // 3. GESTION DU PROFIL
   // =========================================================
@@ -244,9 +257,9 @@ Future<void> loginWithGoogle() async {
       if (e is DioException) {
         // If we get a 403 Forbidden, it likely means the account is blocked/disabled
         if (e.response?.statusCode == 403) {
-            print("⛔ Compte bloqué ou désactivé détecté. Déconnexion forcée.");
-            await logout(); // This clears tokens and notifies listeners (which should redirect to login)
-            return;
+          print("⛔ Compte bloqué ou désactivé détecté. Déconnexion forcée.");
+          await logout(); // This clears tokens and notifies listeners (which should redirect to login)
+          return;
         }
       }
       // DÉTECTION ROBUSTE DU 401 (TOKEN EXPIRÉ)
@@ -524,7 +537,51 @@ Future<void> loginWithGoogle() async {
   // 6. HELPERS
   // =========================================================
 
- Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
+  Future<void> registerSocial({
+    required String commune,
+    required String dateNaissance,
+    required String contact,
+    required String genre,
+    String? codeParrainage,
+  }) async {
+    try {
+      if (_pendingSocialData == null) {
+        throw Exception("Données sociales manquantes.");
+      }
+
+      _setLoading(true);
+
+      final response = await _apiService.post(
+        ApiConstants.socialRegister,
+        data: {
+          'socialData': _pendingSocialData,
+          'commune_choisie': commune,
+          'date_naissance': dateNaissance,
+          'contact': contact,
+          'genre': genre,
+          'code_parrainage': codeParrainage,
+          'push_notification': await NotificationService().getToken(),
+        },
+      );
+
+      await _handleAuthResponse(response.data);
+      _pendingSocialData = null;
+    } catch (e) {
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> _handleAuthResponse(Map<String, dynamic> data) async {
+    // 0. GESTION DU NOUVEL UTILISATEUR SOCIAL (Logique Atomique)
+    if (data['isNewUser'] == true && data['socialData'] != null) {
+      _pendingSocialData = data['socialData'];
+      _requiresProfileCompletion = true;
+      notifyListeners();
+      throw IncompleteProfileException();
+    }
+
     final String accessToken = data['accessToken']?.toString() ?? '';
     final String refreshToken = data['refreshToken']?.toString() ?? '';
 
@@ -560,15 +617,17 @@ Future<void> loginWithGoogle() async {
     // 4. Initialisation OneSignal
     print("🔔 Initialisation OneSignal...");
     try {
-       NotificationService().initialiser();
-    } catch(e) {
-       print("Erreur OneSignal init: $e");
+      NotificationService().initialiser();
+    } catch (e) {
+      print("Erreur OneSignal init: $e");
     }
-    
+
     // 5. Mise à jour du profil complet en arrière-plan (pour être sûr d'avoir les dernières infos)
     // On ne 'await' pas ici pour ne pas bloquer la navigation si le réseau est lent,
     // sauf si c'est critique pour vous.
-    refreshUserProfile().catchError((e) => print("⚠️ Erreur refresh background: $e"));
+    refreshUserProfile().catchError(
+      (e) => print("⚠️ Erreur refresh background: $e"),
+    );
 
     // 6. GESTION DE LA REDIRECTION
     if (!serverSaysProfileComplete) {
@@ -577,25 +636,49 @@ Future<void> loginWithGoogle() async {
     } else {
       _requiresProfileCompletion = false;
     }
-}
+  }
 
   static String getErrorMessage(dynamic error) {
-    if (error is DioException && error.response?.data != null) {
-      final data = error.response?.data;
-      if (data is Map && data.containsKey('message')) {
-        return data['message'];
+    if (error is DioException) {
+      if (error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.sendTimeout ||
+          error.type == DioExceptionType.receiveTimeout) {
+        return "Le délai de connexion a expiré. Veuillez vérifier votre connexion internet.";
+      }
+
+      if (error.type == DioExceptionType.connectionError ||
+          error.error is SocketException) {
+        return "Impossible de se connecter au serveur. Vérifiez que vous êtes bien connecté à Internet.";
+      }
+
+      if (error.response?.data != null) {
+        final data = error.response?.data;
+        if (data is Map && data.containsKey('message')) {
+          return data['message'];
+        }
       }
     }
+
+    final String msg = error.toString().toLowerCase();
+    if (msg.contains('socketexception') ||
+        msg.contains('failed host lookup') ||
+        msg.contains('network_error')) {
+      return "Erreur réseau : Veuillez vérifier votre connexion internet.";
+    }
+
     return error.toString().replaceAll('Exception:', '').trim();
   }
   // =========================================================
   // 7. SUPPRESSION DE COMPTE
   // =========================================================
 
-  Future<void> deleteAccount({String? password, required String authProvider}) async {
+  Future<void> deleteAccount({
+    String? password,
+    required String authProvider,
+  }) async {
     try {
       _setLoading(true);
-      
+
       if (_currentUser == null || _currentUser!.id == null) {
         throw Exception("Utilisateur non identifié");
       }
@@ -605,25 +688,26 @@ Future<void> loginWithGoogle() async {
         data: {
           'id': _currentUser!.id,
           'password': password,
-          'authProvider': authProvider
+          'authProvider': authProvider,
         },
       );
-      
     } catch (e) {
       print("Erreur suppression compte: $e");
-      
+
       // --- GESTION D'ERREUR AMÉLIORÉE ---
       if (e is DioException) {
         if (e.response?.statusCode == 401) {
           // C'est ici qu'on transforme l'erreur technique en message utilisateur
-          throw Exception("Mot de passe incorrect."); 
+          throw Exception("Mot de passe incorrect.");
         } else if (e.response?.data != null && e.response?.data is Map) {
-           // On récupère le message du backend s'il existe (ex: "Utilisateur introuvable")
-           throw Exception(e.response?.data['message'] ?? "Erreur lors de la suppression.");
+          // On récupère le message du backend s'il existe (ex: "Utilisateur introuvable")
+          throw Exception(
+            e.response?.data['message'] ?? "Erreur lors de la suppression.",
+          );
         }
       }
       // ----------------------------------
-      
+
       rethrow; // Relance l'exception propre pour l'afficher dans le SnackBar
     } finally {
       _setLoading(false);

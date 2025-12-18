@@ -26,6 +26,15 @@ class NotificationService {
       StreamController<int>.broadcast();
   Stream<int> get unreadCountStream => _unreadCountController.stream;
 
+  Future<String?> getToken() async {
+    try {
+      return await _fcm.getToken();
+    } catch (e) {
+      print("❌ Erreur getToken FCM : $e");
+      return null;
+    }
+  }
+
   /// Initialiser le service de notifications
   Future<void> initialiser() async {
     if (_initialized) return;
@@ -150,7 +159,7 @@ class NotificationService {
   }
 
   /// Afficher une notification locale quand l'app est au premier plan
- Future<void> _afficherNotificationLocale(RemoteMessage message) async {
+  Future<void> _afficherNotificationLocale(RemoteMessage message) async {
     await refreshUnreadCount();
 
     final notification = message.notification;
@@ -172,9 +181,9 @@ class NotificationService {
               playSound: true,
               enableVibration: true,
               visibility: NotificationVisibility.public,
-              
+
               // 👇 AJOUT DE LA COULEUR ORANGE ICI 👇
-              color: Color(0xFFFF8C42), 
+              color: Color(0xFFFF8C42),
             ),
             iOS: DarwinNotificationDetails(
               presentAlert: true,
@@ -197,15 +206,17 @@ class NotificationService {
     refreshUnreadCount();
     // --- AJOUT : Gestion spécifique pour les messages ---
     if (message.data['type'] == 'nouveau_message') {
-       // On redirige vers l'index 3 (l'onglet Messages dans MainNavigationScreen)
-       // Note : Cela suppose que tu passes un argument ou utilises un Provider pour changer l'index.
-       // Une solution simple est de renvoyer vers /home et laisser l'utilisateur voir le badge.
-       // Si tu as un système de routage avancé, tu peux push vers InboxScreen directement.
-       
-       navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      // On redirige vers l'index 3 (l'onglet Messages dans MainNavigationScreen)
+      // Note : Cela suppose que tu passes un argument ou utilises un Provider pour changer l'index.
+      // Une solution simple est de renvoyer vers /home et laisser l'utilisateur voir le badge.
+      // Si tu as un système de routage avancé, tu peux push vers InboxScreen directement.
+
+      navigatorKey.currentState?.pushNamedAndRemoveUntil(
         '/home', // On va à l'accueil
         (route) => false,
-        arguments: {'tabIndex': 3} // Optionnel : Si ton HomeScreen gère les arguments pour changer d'onglet
+        arguments: {
+          'tabIndex': 3,
+        }, // Optionnel : Si ton HomeScreen gère les arguments pour changer d'onglet
       );
       return;
     }
@@ -216,7 +227,8 @@ class NotificationService {
       );
     });
   }
-// === NOUVELLE FONCTION : Notification Locale Immédiate ===
+
+  // === NOUVELLE FONCTION : Notification Locale Immédiate ===
   Future<void> showInstantNotification(String title, String body) async {
     const androidDetails = AndroidNotificationDetails(
       'pubcash_notifications_v3',
@@ -234,7 +246,10 @@ class NotificationService {
       presentSound: true,
     );
 
-    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
 
     await _localNotifications.show(
       DateTime.now().millisecond, // ID unique
@@ -243,6 +258,7 @@ class NotificationService {
       details,
     );
   }
+
   /// Récupérer les notifications depuis l'API
   Future<List<AppNotification>> recupererNotifications({
     int page = 1,
@@ -322,12 +338,12 @@ class NotificationService {
     await getUnreadCount();
   }
 
-/// Supprimer toutes les notifications
+  /// Supprimer toutes les notifications
   Future<void> supprimerToutesNotifications() async {
     try {
       // Adapte l'endpoint selon ton backend (ex: /notifications/tout ou delete sur /notifications)
-      await _apiService.delete('/notifications/toutes'); 
-      
+      await _apiService.delete('/notifications/toutes');
+
       // On met à jour le compteur à 0
       _unreadCountController.add(0);
     } catch (e) {
@@ -341,11 +357,12 @@ class NotificationService {
   Future<void> supprimerNotification(int notificationId) async {
     try {
       await _apiService.delete('/notifications/$notificationId');
-      await refreshUnreadCount(); 
+      await refreshUnreadCount();
     } catch (e) {
       print('❌ Erreur suppression notification: $e');
     }
   }
+
   /// Afficher une notification locale manuelle (Public)
   Future<void> showLocalNotification({
     required String title,
