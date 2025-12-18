@@ -19,10 +19,7 @@ void main() async {
   // Affiche les barres système normalement (pas en edge-to-edge)
   await SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
-    overlays: [
-      SystemUiOverlay.top,
-      SystemUiOverlay.bottom,
-    ],
+    overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
   );
 
   // Style des barres système (BLANC + icônes noires)

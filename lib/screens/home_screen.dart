@@ -35,7 +35,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final VideoService _videoService = VideoService();
 
   List<Promotion> _promotions = [];
-  Map<String, dynamic> _earnings = {'total': 0};
   int _points = 0;
 
   // Variable pour le badge de notification
@@ -144,8 +143,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // 1. On force la mise à jour du profil (où se trouve le solde utilisateur global)
       await authService.refreshUserProfile();
 
-      // 2. On récupère les gains détaillés
-      final earnings = await _promotionService.getEarnings();
+      // 2. On récupère les notifs
 
       // 3. On récupère les notifs
       final unread = await NotificationService().getUnreadCount();
@@ -156,7 +154,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (mounted) {
         setState(() {
           _promotions = promos;
-          _earnings = earnings;
           // On s'assure de prendre les points frais
           _points = authService.currentUser?.points ?? 0;
           _unreadCount = unread;
@@ -491,7 +488,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     Text(
                                       // MODIFICATION ICI : On utilise authService.showBalance
                                       authService.showBalance
-                                          ? '${_earnings['total'] ?? 0}'
+                                          ? '${authService.currentUser?.solde.toInt() ?? 0}'
                                           : '••••',
                                       style: const TextStyle(
                                         color: Colors.white,

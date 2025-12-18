@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pubcash Mobile</string>
+    <string name="facebook_app_id">761519236573582</string>
+    <string name="fb_login_protocol_scheme">fb761519236573582</string>
+    <string name="facebook_client_token">8d56c8d30d7b44dd2141fe117467b98e</string>
+</resources>

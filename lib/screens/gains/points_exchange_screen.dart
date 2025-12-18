@@ -128,10 +128,10 @@ class _PointsExchangeScreenState extends State<PointsExchangeScreen> {
           padding: const EdgeInsets.all(20.0),
           child: Column(
             children: [
-              // HEADER : Solde de points
+              // HEADER : Solde de points et FCFA
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(30),
+                padding: const EdgeInsets.all(25),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF2D3436), Color(0xFF000000)],
@@ -149,14 +149,36 @@ class _PointsExchangeScreenState extends State<PointsExchangeScreen> {
                 ),
                 child: Column(
                   children: [
+                    // Solde Principal (FCFA)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Solde principal",
+                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                        Text(
+                          "${Provider.of<AuthService>(context).currentUser?.solde.toInt() ?? 0} FCFA",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 15),
+                      child: Divider(color: Colors.white12, height: 1),
+                    ),
                     const Icon(
                       Icons.stars_rounded,
                       color: Colors.orange,
-                      size: 50,
+                      size: 45,
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     const Text(
-                      "Votre Solde",
+                      "Points Accumulés",
                       style: TextStyle(color: Colors.white70, fontSize: 16),
                     ),
                     Text(
