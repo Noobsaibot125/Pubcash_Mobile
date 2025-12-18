@@ -13,6 +13,7 @@ import 'history_screen.dart'; // Si history est dans le même dossier screen/
 
 import '../services/auth_service.dart';
 import '../utils/colors.dart';
+import '../widgets/app_tutorial_dialog.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -66,21 +67,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
   }
-void _showDeleteAccountDialog(BuildContext context, User user) {
+
+  void _showDeleteAccountDialog(BuildContext context, User user) {
     final TextEditingController passwordController = TextEditingController();
-    
+
     // Détection automatique du type de compte
     // Si l'utilisateur a un ID Google ou Facebook, c'est un compte social -> Pas de mot de passe requis
-    bool isSocialAccount = (user.idGoogle != null && user.idGoogle!.isNotEmpty) || 
-                           (user.idFacebook != null && user.idFacebook!.isNotEmpty);
-    
+    bool isSocialAccount =
+        (user.idGoogle != null && user.idGoogle!.isNotEmpty) ||
+        (user.idFacebook != null && user.idFacebook!.isNotEmpty);
+
     // Si c'est un compte social, on ne demande PAS de mot de passe
     bool requiresPassword = !isSocialAccount;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Supprimer le compte ?", style: TextStyle(color: Colors.red)),
+        title: const Text(
+          "Supprimer le compte ?",
+          style: TextStyle(color: Colors.red),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -88,7 +94,7 @@ void _showDeleteAccountDialog(BuildContext context, User user) {
               "Votre compte sera supprimé définitivement après 45 jours. Vous pouvez le réactiver à tout moment en vous reconnectant avant ce délai.",
               style: TextStyle(fontSize: 14),
             ),
-            
+
             // AFFICHER LE CHAMP MOT DE PASSE UNIQUEMENT SI NÉCESSAIRE
             if (requiresPassword) ...[
               const SizedBox(height: 20),
@@ -100,7 +106,7 @@ void _showDeleteAccountDialog(BuildContext context, User user) {
                   border: OutlineInputBorder(),
                 ),
               ),
-            ]
+            ],
           ],
         ),
         actions: [
@@ -113,47 +119,64 @@ void _showDeleteAccountDialog(BuildContext context, User user) {
               // Si mot de passe requis mais vide -> Erreur
               if (requiresPassword && passwordController.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Mot de passe requis pour confirmer.")),
+                  const SnackBar(
+                    content: Text("Mot de passe requis pour confirmer."),
+                  ),
                 );
                 return;
               }
-              
+
               // Appel API
               try {
-                await Provider.of<AuthService>(context, listen: false).deleteAccount(
+                await Provider.of<AuthService>(
+                  context,
+                  listen: false,
+                ).deleteAccount(
                   // On envoie le mot de passe seulement si c'était requis
                   password: requiresPassword ? passwordController.text : null,
                   // On envoie le type d'auth pour que le backend sache quoi vérifier
-                  authProvider: requiresPassword ? 'email' : 'social'
+                  authProvider: requiresPassword ? 'email' : 'social',
                 );
-                
+
                 Navigator.of(ctx).pop(); // Ferme la modale
                 _logout(); // Déconnecte l'utilisateur
-                
+
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text("Compte supprimé. Vous avez 45 jours pour le réactiver."),
-                    backgroundColor: Colors.orange, // Orange pour avertissement/info
+                    content: Text(
+                      "Compte supprimé. Vous avez 45 jours pour le réactiver.",
+                    ),
+                    backgroundColor:
+                        Colors.orange, // Orange pour avertissement/info
                   ),
                 );
               } catch (e) {
                 Navigator.of(ctx).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Erreur: ${e.toString().replaceAll('Exception:', '')}"), backgroundColor: Colors.red),
+                  SnackBar(
+                    content: Text(
+                      "Erreur: ${e.toString().replaceAll('Exception:', '')}",
+                    ),
+                    backgroundColor: Colors.red,
+                  ),
                 );
               }
             },
-            child: const Text("Confirmer la suppression", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: const Text(
+              "Confirmer la suppression",
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
     );
   }
+
   void _logout() {
     Provider.of<AuthService>(context, listen: false).logout();
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
- 
+
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
@@ -345,6 +368,19 @@ void _showDeleteAccountDialog(BuildContext context, User user) {
                   _buildDivider(),
 
                   _ProfileMenuItem(
+                    icon: Icons.help_outline,
+                    iconColor: Colors.blueAccent,
+                    title: "Comment ça marche ?",
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (_) => const AppTutorialDialog(),
+                      );
+                    },
+                  ),
+                  _buildDivider(),
+
+                  _ProfileMenuItem(
                     icon: Icons.description,
                     iconColor: Colors.orange,
                     title: "Conditions générales",
@@ -357,7 +393,7 @@ void _showDeleteAccountDialog(BuildContext context, User user) {
               ),
             ),
             const SizedBox(height: 20),
-_ProfileMenuItem(
+            _ProfileMenuItem(
               icon: Icons.delete_forever,
               iconColor: Colors.red,
               title: "Supprimer mon compte",
@@ -365,7 +401,7 @@ _ProfileMenuItem(
               hideChevron: true,
               onTap: () => _showDeleteAccountDialog(context, user),
             ),
-            
+
             const SizedBox(height: 10), // Petit espace
             _ProfileMenuItem(
               icon: Icons.logout,
@@ -436,5 +472,4 @@ class _ProfileMenuItem extends StatelessWidget {
           : const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
     );
   }
- 
 }

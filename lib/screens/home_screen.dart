@@ -14,6 +14,7 @@ import 'video_player_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 import 'gains/points_exchange_screen.dart';
+import '../services/tutorial_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? goToProfile;
@@ -161,6 +162,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _unreadCount = unread;
           _loading = false;
         });
+
+        // --- AFFICHAGE DU TUTORIEL SI BESOIN ---
+        TutorialService.showTutorialIfNeeded(context);
         widget.onVideoCountChanged?.call(_promotions.length);
       }
     } catch (e) {

@@ -122,6 +122,73 @@ class _CompleteSocialProfileScreenState
     }
   }
 
+  // --- NOUVELLE FONCTION : POPUP D'ERREUR STYLÉ ---
+  void _showErrorDialog(
+    BuildContext context,
+    String title,
+    String message, {
+    IconData icon = Icons.error_outline_rounded,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 50, color: Colors.redAccent),
+              ),
+              const SizedBox(height: 15),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, color: Colors.black54),
+              ),
+              const SizedBox(height: 25),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text(
+                    "D'accord",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedVilleId == null || _selectedCommune == null) {
@@ -176,10 +243,32 @@ class _CompleteSocialProfileScreenState
           ).pushNamedAndRemoveUntil('/home', (route) => false);
         }
       } catch (e) {
+        final String readableMessage = AuthService.getErrorMessage(e);
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Erreur: ${e.toString()}')));
+          if (readableMessage.toLowerCase().contains("déjà utilisé") ||
+              readableMessage.toLowerCase().contains("existe déjà")) {
+            _showErrorDialog(
+              context,
+              "Données déjà utilisées",
+              readableMessage,
+              icon: Icons.person_off_rounded,
+            );
+          } else if (readableMessage.toLowerCase().contains("connexion") ||
+              readableMessage.toLowerCase().contains("internet") ||
+              readableMessage.toLowerCase().contains("réseau")) {
+            _showErrorDialog(
+              context,
+              "Erreur de connexion",
+              readableMessage,
+              icon: Icons.wifi_off_rounded,
+            );
+          } else {
+            _showErrorDialog(
+              context,
+              "Une erreur est survenue",
+              readableMessage,
+            );
+          }
         }
       }
     }

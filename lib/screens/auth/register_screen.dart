@@ -207,7 +207,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   // --- NOUVELLE FONCTION : POPUP D'ERREUR STYLÉ ---
-  void _showErrorDialog(BuildContext context, String title, String message) {
+  void _showErrorDialog(
+    BuildContext context,
+    String title,
+    String message, {
+    IconData icon = Icons.error_outline_rounded,
+  }) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -223,15 +228,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   color: Colors.redAccent.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.wifi_off_rounded,
-                  size: 50,
-                  color: Colors.redAccent,
-                ),
+                child: Icon(icon, size: 50, color: Colors.redAccent),
               ),
               const SizedBox(height: 15),
               Text(
                 title,
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -365,9 +367,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
             readableMessage.toLowerCase().contains("internet") ||
             readableMessage.toLowerCase().contains("réseau")) {
           if (mounted)
-            _showErrorDialog(context, "Erreur de connexion", readableMessage);
+            _showErrorDialog(
+              context,
+              "Erreur de connexion",
+              readableMessage,
+              icon: Icons.wifi_off_rounded,
+            );
+        } else if (readableMessage.toLowerCase().contains("déjà utilisé") ||
+            readableMessage.toLowerCase().contains("existe déjà")) {
+          if (mounted)
+            _showErrorDialog(
+              context,
+              "Données déjà utilisées",
+              readableMessage,
+              icon: Icons.person_off_rounded,
+            );
         } else {
-          _showError(readableMessage);
+          if (mounted)
+            _showErrorDialog(
+              context,
+              "Une erreur est survenue",
+              readableMessage,
+            );
         }
       }
     }
