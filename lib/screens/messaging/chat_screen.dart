@@ -297,6 +297,9 @@ class _ChatScreenState extends State<ChatScreen> {
             duration: const Duration(seconds: 2),
           ),
         );
+
+        // Recharger pour mettre à jour la vue (masquer spam supprimé, afficher historique)
+        _loadMessages();
       }
     } catch (e) {
       if (mounted) {
