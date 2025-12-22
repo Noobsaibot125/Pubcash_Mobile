@@ -10,8 +10,8 @@ class SimpleVideoPlayer extends StatefulWidget {
   final String videoUrl;
   final String title;
   final int? promotionId; // ID pour poster un commentaire
-  final int? clientId;       // C'est l'ID du client à suivre
-  final String? clientName;  // Nom de l'entreprise ou utilisateur
+  final int? clientId; // C'est l'ID du client à suivre
+  final String? clientName; // Nom de l'entreprise ou utilisateur
   final String? clientAvatar;
   final String? promoterName; // Nom du promoteur
   final String? promoterAvatar; // Avatar du promoteur
@@ -25,9 +25,9 @@ class SimpleVideoPlayer extends StatefulWidget {
     this.promoterName,
     this.promoterAvatar,
     this.promoterId,
-    this.clientId,      // Modifié
-    this.clientName,    // Modifié
-    this.clientAvatar,  // Modifié
+    this.clientId, // Modifié
+    this.clientName, // Modifié
+    this.clientAvatar, // Modifié
   });
 
   @override
@@ -46,7 +46,7 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
 
   bool _isSendingComment = false;
   bool _hasCommented = false;
-  bool _isLoadingCommentStatus = true; 
+  bool _isLoadingCommentStatus = true;
 
   int _wordCount = 0;
   static const int _maxWords = 200;
@@ -105,14 +105,55 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
     setState(() => _isLoadingFollow = true);
     try {
       if (_isFollowing) {
-        await _followService.unfollowPromoter(widget.clientId!); // Assurez-vous que votre service gère l'ID client
+        await _followService.unfollowPromoter(widget.clientId!);
+        if (mounted) {
+          setState(() {
+            _isFollowing = false;
+          });
+        }
       } else {
         await _followService.followPromoter(widget.clientId!);
-      }
-      if (mounted) {
-        setState(() {
-          _isFollowing = !_isFollowing;
-        });
+        if (mounted) {
+          setState(() {
+            _isFollowing = true;
+          });
+
+          // Afficher le popup de confirmation
+          showDialog(
+            context: context,
+            barrierDismissible: true,
+            builder: (BuildContext ctx) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                title: const Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green, size: 28),
+                    SizedBox(width: 10),
+                    Text("Abonnement confirmé"),
+                  ],
+                ),
+                content: Text(
+                  "Vous suivez maintenant '${widget.clientName ?? 'ce promoteur'}'",
+                  style: const TextStyle(fontSize: 16),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text(
+                      "OK",
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -133,7 +174,9 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
     }
 
     try {
-      final hasComment = await _promotionService.hasComment(widget.promotionId!);
+      final hasComment = await _promotionService.hasComment(
+        widget.promotionId!,
+      );
       if (mounted) {
         setState(() {
           _hasCommented = hasComment;
@@ -226,7 +269,9 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
           barrierDismissible: false,
           builder: (BuildContext ctx) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
               title: const Row(
                 children: [
                   Icon(Icons.check_circle, color: Colors.green),
@@ -234,11 +279,20 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                   Text("Merci !"),
                 ],
               ),
-              content: const Text("Votre commentaire a été envoyé avec succès.", style: TextStyle(fontSize: 16)),
+              content: const Text(
+                "Votre commentaire a été envoyé avec succès.",
+                style: TextStyle(fontSize: 16),
+              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text("OK", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    "OK",
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             );
@@ -248,20 +302,28 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
     } catch (e) {
       if (mounted) {
         if (e.toString().contains("403")) {
-          setState(() { _hasCommented = true; });
+          setState(() {
+            _hasCommented = true;
+          });
           showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
               title: const Text("Info"),
               content: const Text("Vous avez déjà commenté cette promotion."),
               actions: [
-                TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text("OK")),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text("OK"),
+                ),
               ],
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Erreur lors de l\'envoi.'), backgroundColor: Colors.red),
+            const SnackBar(
+              content: Text('Erreur lors de l\'envoi.'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       }
@@ -289,7 +351,9 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                             aspectRatio: _controller.value.aspectRatio,
                             child: VideoPlayer(_controller),
                           )
-                        : const CircularProgressIndicator(color: AppColors.primary),
+                        : const CircularProgressIndicator(
+                            color: AppColors.primary,
+                          ),
                   ),
 
                   // 2. ZONE TACTILE
@@ -297,7 +361,9 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                     onTap: _toggleControls,
                     behavior: HitTestBehavior.translucent,
                     child: Container(
-                      color: _showControls ? Colors.black45 : Colors.transparent,
+                      color: _showControls
+                          ? Colors.black45
+                          : Colors.transparent,
                       width: double.infinity,
                       height: double.infinity,
                     ),
@@ -314,10 +380,16 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                             backgroundColor: Colors.transparent,
                             elevation: 0,
                             leading: IconButton(
-                              icon: const Icon(Icons.arrow_back, color: Colors.white),
+                              icon: const Icon(
+                                Icons.arrow_back,
+                                color: Colors.white,
+                              ),
                               onPressed: () => Navigator.pop(context),
                             ),
-                            title: Text(widget.title, style: const TextStyle(color: Colors.white)),
+                            title: Text(
+                              widget.title,
+                              style: const TextStyle(color: Colors.white),
+                            ),
                           ),
 
                           // CENTRE
@@ -326,19 +398,26 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                             children: [
                               IconButton(
                                 iconSize: 40,
-                                icon: const Icon(Icons.replay_10, color: Colors.white),
+                                icon: const Icon(
+                                  Icons.replay_10,
+                                  color: Colors.white,
+                                ),
                                 onPressed: () => _seekRelative(-10),
                               ),
                               const SizedBox(width: 20),
                               IconButton(
                                 iconSize: 70,
                                 icon: Icon(
-                                  _controller.value.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                                  _controller.value.isPlaying
+                                      ? Icons.pause_circle_filled
+                                      : Icons.play_circle_fill,
                                   color: AppColors.primary,
                                 ),
                                 onPressed: () {
                                   setState(() {
-                                    _controller.value.isPlaying ? _controller.pause() : _controller.play();
+                                    _controller.value.isPlaying
+                                        ? _controller.pause()
+                                        : _controller.play();
                                     _startHideTimer();
                                   });
                                 },
@@ -346,7 +425,10 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                               const SizedBox(width: 20),
                               IconButton(
                                 iconSize: 40,
-                                icon: const Icon(Icons.forward_10, color: Colors.white),
+                                icon: const Icon(
+                                  Icons.forward_10,
+                                  color: Colors.white,
+                                ),
                                 onPressed: () => _seekRelative(10),
                               ),
                             ],
@@ -358,22 +440,41 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                             child: Column(
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(_formatDuration(_controller.value.position), style: const TextStyle(color: Colors.white)),
-                                    Text(_formatDuration(_controller.value.duration), style: const TextStyle(color: Colors.white)),
+                                    Text(
+                                      _formatDuration(
+                                        _controller.value.position,
+                                      ),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    Text(
+                                      _formatDuration(
+                                        _controller.value.duration,
+                                      ),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                      ),
+                                    ),
                                   ],
                                 ),
                                 Slider(
-                                  value: _controller.value.position.inSeconds.toDouble(),
+                                  value: _controller.value.position.inSeconds
+                                      .toDouble(),
                                   min: 0.0,
-                                  max: _controller.value.duration.inSeconds.toDouble(),
+                                  max: _controller.value.duration.inSeconds
+                                      .toDouble(),
                                   activeColor: AppColors.primary,
                                   inactiveColor: Colors.white24,
                                   onChanged: (value) {
                                     _hideTimer?.cancel();
                                     setState(() {
-                                      _controller.seekTo(Duration(seconds: value.toInt()));
+                                      _controller.seekTo(
+                                        Duration(seconds: value.toInt()),
+                                      );
                                     });
                                   },
                                   onChangeEnd: (value) {
@@ -400,11 +501,19 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                   CircleAvatar(
                     radius: 18,
                     backgroundColor: Colors.grey[700],
-                    backgroundImage: widget.clientAvatar != null && widget.clientAvatar!.isNotEmpty
+                    backgroundImage:
+                        widget.clientAvatar != null &&
+                            widget.clientAvatar!.isNotEmpty
                         ? NetworkImage(widget.clientAvatar!)
                         : null,
-                    child: widget.clientAvatar == null || widget.clientAvatar!.isEmpty
-                        ? const Icon(Icons.person, color: Colors.white, size: 20)
+                    child:
+                        widget.clientAvatar == null ||
+                            widget.clientAvatar!.isEmpty
+                        ? const Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 20,
+                          )
                         : null,
                   ),
                   const SizedBox(width: 10),
@@ -413,7 +522,11 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                   Expanded(
                     child: Text(
                       widget.clientName ?? 'Client',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -421,14 +534,19 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                   // Boutons Chat et Suivre (Visibles uniquement si clientId existe)
                   if (widget.clientId != null) ...[
                     IconButton(
-                      icon: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 24),
+                      icon: const Icon(
+                        Icons.chat_bubble_outline,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                       onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => ChatScreen(
                               contactId: widget.clientId!,
-                              contactType: 'client', // Type explicite pour votre logique de chat
+                              contactType:
+                                  'client', // Type explicite pour votre logique de chat
                               contactName: widget.clientName ?? 'Client',
                               contactPhoto: widget.clientAvatar,
                             ),
@@ -440,18 +558,39 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                     ElevatedButton(
                       onPressed: _isLoadingFollow ? null : _toggleFollow,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _isFollowing ? Colors.grey[400] : Colors.transparent,
-                        side: BorderSide(color: _isFollowing ? Colors.transparent : Colors.white, width: 1),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        backgroundColor: _isFollowing
+                            ? Colors.grey[400]
+                            : Colors.transparent,
+                        side: BorderSide(
+                          color: _isFollowing
+                              ? Colors.transparent
+                              : Colors.white,
+                          width: 1,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
                         elevation: 0,
                       ),
                       child: _isLoadingFollow
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
                           : Text(
                               _isFollowing ? 'Suivi' : 'Suivre',
                               style: TextStyle(
-                                color: _isFollowing ? Colors.black54 : Colors.white,
+                                color: _isFollowing
+                                    ? Colors.black54
+                                    : Colors.white,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13,
                               ),
@@ -463,10 +602,15 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
             ),
 
             // === BARRE DE COMMENTAIRE ===
-            if (widget.promotionId != null && !_isLoadingCommentStatus && !_hasCommented)
+            if (widget.promotionId != null &&
+                !_isLoadingCommentStatus &&
+                !_hasCommented)
               Container(
                 color: const Color(0xFF2C2C2E),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -480,45 +624,88 @@ class _SimpleVideoPlayerState extends State<SimpleVideoPlayer> {
                             ),
                             child: TextField(
                               controller: _commentController,
-                              style: const TextStyle(color: Color.fromARGB(255, 8, 8, 8), fontSize: 14),
+                              style: const TextStyle(
+                                color: Color.fromARGB(255, 8, 8, 8),
+                                fontSize: 14,
+                              ),
                               maxLines: 2,
                               minLines: 1,
                               decoration: InputDecoration(
                                 hintText: 'Ajouter un commentaire...',
-                                hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                                hintStyle: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 14,
+                                ),
                                 border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 10,
+                                ),
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         _isSendingComment
-                            ? const SizedBox(width: 36, height: 36, child: Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)))
+                            ? const SizedBox(
+                                width: 36,
+                                height: 36,
+                                child: Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              )
                             : IconButton(
-                                onPressed: _commentController.text.trim().isNotEmpty ? _sendComment : null,
+                                onPressed:
+                                    _commentController.text.trim().isNotEmpty
+                                    ? _sendComment
+                                    : null,
                                 icon: Icon(
                                   Icons.send_rounded,
-                                  color: _commentController.text.trim().isNotEmpty ? AppColors.primary : Colors.grey[600],
+                                  color:
+                                      _commentController.text.trim().isNotEmpty
+                                      ? AppColors.primary
+                                      : Colors.grey[600],
                                 ),
                               ),
                       ],
                     ),
                     Padding(
                       padding: const EdgeInsets.only(top: 4, right: 8),
-                      child: Text('$_wordCount / $_maxWords mots', style: TextStyle(color: _wordCount > _maxWords ? Colors.red : Colors.grey[500], fontSize: 11)),
+                      child: Text(
+                        '$_wordCount / $_maxWords mots',
+                        style: TextStyle(
+                          color: _wordCount > _maxWords
+                              ? Colors.red
+                              : Colors.grey[500],
+                          fontSize: 11,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
 
             // Message si déjà commenté
-            if (widget.promotionId != null && !_isLoadingCommentStatus && _hasCommented)
+            if (widget.promotionId != null &&
+                !_isLoadingCommentStatus &&
+                _hasCommented)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 color: const Color(0xFF1C1C1E),
-                child: const Text("Vous avez déjà commenté cette promotion.", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic, fontSize: 12), textAlign: TextAlign.center),
+                child: const Text(
+                  "Vous avez déjà commenté cette promotion.",
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                    fontSize: 12,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
           ],
         ),

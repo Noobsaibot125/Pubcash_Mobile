@@ -2,10 +2,11 @@ import 'dart:convert'; // Pour décoder le token si besoin (ou juste simuler)
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import '../../services/follow_service.dart'; // Pour gérer le suivi
 // IMPORT IMPORTANT POUR LE SOCKET
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 // Pour récupérer l'ID de l'utilisateur connecté (stockage local)
-import 'package:shared_preferences/shared_preferences.dart'; 
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:pubcash_mobile/utils/api_constants.dart';
 import '../../services/message_service.dart';
@@ -17,6 +18,7 @@ class ChatScreen extends StatefulWidget {
   final String contactType;
   final String contactName;
   final String? contactPhoto;
+  final bool? isFollowing; // Statut de suivi
 
   const ChatScreen({
     super.key,
@@ -24,6 +26,7 @@ class ChatScreen extends StatefulWidget {
     required this.contactType,
     required this.contactName,
     this.contactPhoto,
+    this.isFollowing,
   });
 
   @override
@@ -42,12 +45,16 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSending = false;
   bool _showEmoji = false;
   bool _isOnline = false;
+  bool _isFollowing = false; // Statut de suivi local
+  final FollowService _followService = FollowService();
 
   final String _baseUrl = ApiConstants.socketUrl;
 
   @override
   void initState() {
     super.initState();
+    _isFollowing =
+        widget.isFollowing ?? true; // Par défaut, on suppose qu'on suit
     _loadMessages();
     _connectSocket(); // On lance la connexion Socket au lieu du Timer
   }
@@ -55,46 +62,45 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     // On déconnecte proprement le socket en quittant l'écran
-    socket.dispose(); 
+    socket.dispose();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   // --- CONFIGURATION SOCKET.IO ---
- void _connectSocket() async {
+  void _connectSocket() async {
     final prefs = await SharedPreferences.getInstance();
-    final int? myId = prefs.getInt('userId'); 
-    final String? myRole = prefs.getString('userRole'); 
-    
+    final int? myId = prefs.getInt('userId');
+    final String? myRole = prefs.getString('userRole');
+
     if (myId == null || myRole == null) return;
 
-    socket = IO.io(_baseUrl, IO.OptionBuilder()
-      .setTransports(['websocket'])
-      .disableAutoConnect() 
-      .build()
+    socket = IO.io(
+      _baseUrl,
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .disableAutoConnect()
+          .build(),
     );
 
     socket.connect();
 
     socket.onConnect((_) {
       print('✅ Connecté au serveur Socket.io');
-      socket.emit('register_chat', {
-        'userId': myId,
-        'userType': myRole 
-      });
+      socket.emit('register_chat', {'userId': myId, 'userType': myRole});
     });
 
     // 4. Écouter les nouveaux messages entrants
     socket.on('receive_message', (data) {
       print('📩 Nouveau message reçu via Socket: $data');
-      
+
       if (mounted) {
         // --- CORRECTION ICI : Conversion en String pour la comparaison ---
         // On convertit tout en String pour éviter les erreurs "5" (String) != 5 (Int)
         final String incomingSenderId = data['id_expediteur'].toString();
         final String currentContactId = widget.contactId.toString();
-        
+
         final String incomingSenderType = data['type_expediteur'].toString();
         final String currentContactType = widget.contactType.toString();
 
@@ -102,26 +108,39 @@ class _ChatScreenState extends State<ChatScreen> {
         final String myRoleStr = myRole.toString();
 
         // Est-ce que le message vient de la personne à qui je parle ?
-        bool isFromContact = (incomingSenderId == currentContactId && incomingSenderType == currentContactType);
-        
+        bool isFromContact =
+            (incomingSenderId == currentContactId &&
+            incomingSenderType == currentContactType);
+
         // Est-ce que c'est MOI qui l'ai envoyé (depuis un autre appareil ou via l'API) ?
-        bool isFromMe = (incomingSenderId == myIdStr && incomingSenderType == myRoleStr);
+        bool isFromMe =
+            (incomingSenderId == myIdStr && incomingSenderType == myRoleStr);
 
         print("🧐 Analyse du message :");
         print("   - Reçu de ID: $incomingSenderId (Type: $incomingSenderType)");
-        print("   - Contact actuel ID: $currentContactId (Type: $currentContactType)");
+        print(
+          "   - Contact actuel ID: $currentContactId (Type: $currentContactType)",
+        );
         print("   - Est-ce le contact ? $isFromContact");
 
         if (isFromContact || isFromMe) {
-           setState(() {
-             _messages.add(data);
-             if (isFromContact) _isOnline = true;
-           });
-           
-           // Petit délai pour laisser le temps à la liste de se construire avant de scroller
-           Future.delayed(const Duration(milliseconds: 100), () {
-             _scrollToBottom();
-           });
+          // NOUVEAU: Si c'est un message du contact (promoteur) mais qu'on ne le suit pas, on l'ignore (Option A)
+          if (widget.contactType == 'client' &&
+              isFromContact &&
+              !_isFollowing) {
+            print('📩 Message socket ignoré car promoteur non suivi');
+            return;
+          }
+
+          setState(() {
+            _messages.add(data);
+            if (isFromContact) _isOnline = true;
+          });
+
+          // Petit délai pour laisser le temps à la liste de se construire avant de scroller
+          Future.delayed(const Duration(milliseconds: 100), () {
+            _scrollToBottom();
+          });
         }
       }
     });
@@ -155,13 +174,13 @@ class _ChatScreenState extends State<ChatScreen> {
       if (msgs.isNotEmpty) {
         final lastMsg = msgs.last;
         if (lastMsg['id_expediteur'] == widget.contactId) {
-             final dateStr = lastMsg['date_envoi'];
-             if (dateStr != null) {
-               final msgDate = DateTime.parse(dateStr).toLocal();
-               if (DateTime.now().difference(msgDate).inMinutes < 5) {
-                 onlineStatus = true;
-               }
-             }
+          final dateStr = lastMsg['date_envoi'];
+          if (dateStr != null) {
+            final msgDate = DateTime.parse(dateStr).toLocal();
+            if (DateTime.now().difference(msgDate).inMinutes < 5) {
+              onlineStatus = true;
+            }
+          }
         }
       }
 
@@ -202,23 +221,23 @@ class _ChatScreenState extends State<ChatScreen> {
         receiverType: widget.contactType,
         content: text,
       );
-      
+
       _textController.clear();
-      
+
       // 2. Ajouter manuellement le message à notre liste locale
       // (Car le socket "receive_message" est envoyé au DESTINATAIRE, pas forcément à l'expéditeur sauf si tu l'as codé ainsi)
       // Mais ici, pour être fluide, on l'ajoute direct.
-      
+
       // On peut récupérer l'objet complet si ton API le renvoie, sinon on le construit
       // Supposons que ton API renvoie { message: '...', messageId: 123, dateEnvoi: '...' }
       // Il faut adapter selon ce que ton API `sendMessage` retourne.
       // Si `sendMessage` est void dans ton service, on recharge tout :
-      await _loadMessages(); 
-      
+      await _loadMessages();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("Erreur d'envoi")));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Erreur d'envoi")));
       }
     } finally {
       if (mounted) setState(() => _isSending = false);
@@ -237,11 +256,12 @@ class _ChatScreenState extends State<ChatScreen> {
         content: "",
         imagePath: image.path,
       );
-      await _loadMessages(); 
+      await _loadMessages();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Erreur d'envoi image")));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Erreur d'envoi image")));
       }
     } finally {
       if (mounted) setState(() => _isSending = false);
@@ -259,6 +279,35 @@ class _ChatScreenState extends State<ChatScreen> {
     if (path.startsWith('http')) return path;
     if (path.startsWith('/')) return "$_baseUrl$path";
     return "$_baseUrl/$path";
+  }
+
+  Future<void> _handleResubscribe() async {
+    try {
+      await _followService.followPromoter(widget.contactId);
+
+      if (mounted) {
+        setState(() {
+          _isFollowing = true;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Vous suivez maintenant '${widget.contactName}'"),
+            backgroundColor: AppColors.primary,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Erreur lors du réabonnement: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -294,17 +343,22 @@ class _ChatScreenState extends State<ChatScreen> {
                   Text(
                     widget.contactName,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w600),
+                      color: Colors.white,
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    _isOnline ? "En ligne" : "Hors ligne", 
+                    _isOnline ? "En ligne" : "Hors ligne",
                     style: TextStyle(
-                      color: _isOnline ? const Color.fromARGB(255, 128, 255, 132) : Colors.white70, 
+                      color: _isOnline
+                          ? const Color.fromARGB(255, 128, 255, 132)
+                          : Colors.white70,
                       fontSize: 12,
-                      fontWeight: _isOnline ? FontWeight.bold : FontWeight.normal
+                      fontWeight: _isOnline
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   ),
                 ],
@@ -323,18 +377,24 @@ class _ChatScreenState extends State<ChatScreen> {
               },
               child: _isLoading
                   ? const Center(
-                      child: CircularProgressIndicator(color: AppColors.primary))
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                      ),
+                    )
                   : ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 10),
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
                       itemCount: _messages.length,
                       itemBuilder: (ctx, i) {
                         final msg = _messages[i];
-                        final isThem = msg['id_expediteur'] == widget.contactId &&
+                        final isThem =
+                            msg['id_expediteur'] == widget.contactId &&
                             msg['type_expediteur'] == widget.contactType;
-                        
-                        final dateStr = msg['date_envoi']; 
+
+                        final dateStr = msg['date_envoi'];
                         final formattedTime = _formatTime(dateStr);
 
                         return Align(
@@ -343,7 +403,12 @@ class _ChatScreenState extends State<ChatScreen> {
                               : Alignment.centerRight,
                           child: Container(
                             margin: const EdgeInsets.symmetric(vertical: 4),
-                            padding: const EdgeInsets.only(left: 8, right: 8, top: 4, bottom: 4),
+                            padding: const EdgeInsets.only(
+                              left: 8,
+                              right: 8,
+                              top: 4,
+                              bottom: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: isThem ? Colors.white : AppColors.primary,
                               borderRadius: BorderRadius.only(
@@ -361,11 +426,13 @@ class _ChatScreenState extends State<ChatScreen> {
                                   color: Colors.black.withOpacity(0.1),
                                   blurRadius: 2,
                                   offset: const Offset(0, 1),
-                                )
+                                ),
                               ],
                             ),
                             constraints: BoxConstraints(
-                                maxWidth: MediaQuery.of(context).size.width * 0.75),
+                              maxWidth:
+                                  MediaQuery.of(context).size.width * 0.75,
+                            ),
                             child: Padding(
                               padding: const EdgeInsets.all(4.0),
                               child: Column(
@@ -382,17 +449,21 @@ class _ChatScreenState extends State<ChatScreen> {
                                           _getMediaUrl(msg['url_media']),
                                           fit: BoxFit.cover,
                                           loadingBuilder:
-                                              (ctx, child, progress) =>
-                                                  progress == null
-                                                      ? child
-                                                      : Container(
-                                                          height: 150,
-                                                          width: 150,
-                                                          color: Colors.black12,
-                                                          child: const Center(
-                                                              child:
-                                                                  CircularProgressIndicator()),
-                                                        ),
+                                              (
+                                                ctx,
+                                                child,
+                                                progress,
+                                              ) => progress == null
+                                              ? child
+                                              : Container(
+                                                  height: 150,
+                                                  width: 150,
+                                                  color: Colors.black12,
+                                                  child: const Center(
+                                                    child:
+                                                        CircularProgressIndicator(),
+                                                  ),
+                                                ),
                                           errorBuilder: (ctx, err, stack) =>
                                               const Icon(Icons.broken_image),
                                         ),
@@ -400,7 +471,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                     )
                                   else
                                     Padding(
-                                      padding: const EdgeInsets.only(bottom: 4.0),
+                                      padding: const EdgeInsets.only(
+                                        bottom: 4.0,
+                                      ),
                                       child: Text(
                                         msg['contenu'] ?? '',
                                         style: TextStyle(
@@ -417,9 +490,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                       formattedTime,
                                       style: TextStyle(
                                         fontSize: 10,
-                                        color: isThem 
-                                          ? Colors.grey[600] 
-                                          : Colors.white70,
+                                        color: isThem
+                                            ? Colors.grey[600]
+                                            : Colors.white70,
                                       ),
                                     ),
                                   ),
@@ -435,10 +508,60 @@ class _ChatScreenState extends State<ChatScreen> {
 
           SafeArea(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), 
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Afficher le message de verrouillage si non suivi ET que c'est un client
+                  if (!_isFollowing && widget.contactType == 'client')
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[50],
+                        border: Border.all(color: Colors.orange, width: 1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.lock_outline,
+                            color: Colors.orange,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Vous devez suivre ${widget.contactName} pour envoyer des messages",
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _handleResubscribe,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              backgroundColor: AppColors.primary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            child: const Text(
+                              "Suivre",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -457,45 +580,69 @@ class _ChatScreenState extends State<ChatScreen> {
                                       : Icons.emoji_emotions_outlined,
                                   color: Colors.grey[600],
                                 ),
-                                onPressed: () {
-                                  setState(() => _showEmoji = !_showEmoji);
-                                  if (_showEmoji) {
-                                    FocusScope.of(context).unfocus();
-                                  } else {
-                                    FocusScope.of(context).requestFocus();
-                                  }
-                                },
+                                onPressed:
+                                    (_isFollowing ||
+                                        widget.contactType != 'client')
+                                    ? () {
+                                        setState(
+                                          () => _showEmoji = !_showEmoji,
+                                        );
+                                        if (_showEmoji) {
+                                          FocusScope.of(context).unfocus();
+                                        } else {
+                                          FocusScope.of(context).requestFocus();
+                                        }
+                                      }
+                                    : null,
                               ),
                               Expanded(
                                 child: TextField(
                                   controller: _textController,
+                                  enabled:
+                                      _isFollowing ||
+                                      widget.contactType != 'client',
                                   onTap: () {
                                     if (_showEmoji)
                                       setState(() => _showEmoji = false);
                                   },
-                                  decoration: const InputDecoration(
-                                    hintText: "Message",
+                                  decoration: InputDecoration(
+                                    hintText:
+                                        (_isFollowing ||
+                                            widget.contactType != 'client')
+                                        ? "Message"
+                                        : "Suivez d'abord ce promoteur",
                                     hintStyle: TextStyle(color: Colors.grey),
                                     border: InputBorder.none,
-                                    contentPadding:
-                                        EdgeInsets.symmetric(vertical: 10),
+                                    contentPadding: EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
                                   ),
                                   minLines: 1,
                                   maxLines: 6,
                                 ),
                               ),
                               IconButton(
-                                icon: Icon(Icons.attach_file,
-                                    color: Colors.grey[600]),
-                                onPressed: () =>
-                                    _pickImage(ImageSource.gallery),
+                                icon: Icon(
+                                  Icons.attach_file,
+                                  color: Colors.grey[600],
+                                ),
+                                onPressed:
+                                    (_isFollowing ||
+                                        widget.contactType != 'client')
+                                    ? () => _pickImage(ImageSource.gallery)
+                                    : null,
                               ),
                               if (_textController.text.isEmpty)
                                 IconButton(
-                                  icon: Icon(Icons.camera_alt_outlined,
-                                      color: Colors.grey[600]),
-                                  onPressed: () =>
-                                      _pickImage(ImageSource.camera),
+                                  icon: Icon(
+                                    Icons.camera_alt_outlined,
+                                    color: Colors.grey[600],
+                                  ),
+                                  onPressed:
+                                      (_isFollowing ||
+                                          widget.contactType != 'client')
+                                      ? () => _pickImage(ImageSource.camera)
+                                      : null,
                                 ),
                             ],
                           ),
@@ -503,23 +650,36 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       const SizedBox(width: 6),
                       GestureDetector(
-                        onTap: _isSending ? null : _sendMessage,
+                        onTap:
+                            (_isSending ||
+                                !_isFollowing && widget.contactType == 'client')
+                            ? null
+                            : _sendMessage,
                         child: CircleAvatar(
-                          backgroundColor: AppColors.primary,
+                          backgroundColor:
+                              (_isFollowing || widget.contactType != 'client')
+                              ? AppColors.primary
+                              : Colors.grey[400],
                           radius: 24,
                           child: _isSending
                               ? const SizedBox(
                                   height: 20,
                                   width: 20,
                                   child: CircularProgressIndicator(
-                                      color: Colors.white, strokeWidth: 2))
-                              : const Icon(Icons.send,
-                                  color: Colors.white, size: 22),
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.send,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
                         ),
                       ),
                     ],
                   ),
-                  
+
                   if (_showEmoji)
                     SizedBox(
                       height: 270,
@@ -534,7 +694,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           checkPlatformCompatibility: true,
                           emojiViewConfig: EmojiViewConfig(
                             columns: 7,
-                            emojiSizeMax: 32 *
+                            emojiSizeMax:
+                                32 *
                                 (foundation.defaultTargetPlatform ==
                                         TargetPlatform.iOS
                                     ? 1.30
@@ -554,10 +715,12 @@ class _ChatScreenState extends State<ChatScreen> {
                             indicatorColor: Colors.grey,
                             enabled: true,
                           ),
-                          bottomActionBarConfig:
-                              const BottomActionBarConfig(enabled: false),
+                          bottomActionBarConfig: const BottomActionBarConfig(
+                            enabled: false,
+                          ),
                           searchViewConfig: const SearchViewConfig(
-                              backgroundColor: Color(0xFFF2F2F2)),
+                            backgroundColor: Color(0xFFF2F2F2),
+                          ),
                         ),
                       ),
                     ),
