@@ -6,6 +6,7 @@ import '../utils/api_constants.dart'; // 👈 IMPORT IMPORTANT
 import 'simple_video_player.dart';
 import 'gains/transaction_details_screen.dart';
 import 'messaging/chat_screen.dart';
+
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({Key? key}) : super(key: key);
 
@@ -64,7 +65,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-// --- NOUVEAU : Fonction pour supprimer tout avec confirmation ---
+
+  // --- NOUVEAU : Fonction pour supprimer tout avec confirmation ---
   Future<void> _confirmDeleteAll() async {
     if (_notifications.isEmpty) return;
 
@@ -72,7 +74,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Tout supprimer ?"),
-        content: const Text("Voulez-vous vraiment effacer toutes vos notifications ?"),
+        content: const Text(
+          "Voulez-vous vraiment effacer toutes vos notifications ?",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -128,12 +132,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           _notifications.insert(index, removedItem);
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Impossible de supprimer la notification")),
+          const SnackBar(
+            content: Text("Impossible de supprimer la notification"),
+          ),
         );
       }
     }
   }
-
 
   String _formaterDate(DateTime date) {
     final diff = DateTime.now().difference(date);
@@ -152,7 +157,85 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     print("Clic Notification Type: ${notif.type}");
-// --- AJOUT : GESTION DU CLIC SUR UN MESSAGE ---
+
+    // --- CORRECTION : POPUP POUR MESSAGES ADMIN ---
+    if (notif.type == 'admin_message') {
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: 60,
+                    height: 60,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  notif.titre.replaceAll(
+                    'PubCash : ',
+                    '',
+                  ), // On enlève le préfixe pour le popup
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 300),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      notif.contenu,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[800],
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      "Compris",
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    // --- AJOUT : GESTION DU CLIC SUR UN MESSAGE ---
     if (notif.type == 'nouveau_message') {
       if (notif.donnees != null && notif.donnees!['sender_id'] != null) {
         Navigator.push(
@@ -162,7 +245,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               contactId: int.parse(notif.donnees!['sender_id'].toString()),
               contactType: notif.donnees!['sender_type'] ?? 'client',
               // On utilise le titre de la notif comme nom par défaut ou on cherche dans les données
-              contactName: notif.donnees?['sender_name'] ?? notif.titre.replaceAll('Nouveau message', '').trim(), 
+              contactName:
+                  notif.donnees?['sender_name'] ??
+                  notif.titre.replaceAll('Nouveau message', '').trim(),
               contactPhoto: notif.donnees?['sender_photo'],
             ),
           ),
@@ -257,15 +342,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
- String _getValidImageUrl(String path, String folder) {
+  String _getValidImageUrl(String path, String folder) {
     if (path.isEmpty) return "";
     if (path.startsWith('http')) return path;
-    
+
     // Si le chemin contient déjà 'uploads', on ne rajoute pas le dossier
     if (path.contains('uploads/')) {
-        // On s'assure juste qu'il n'y a pas de double slash au début
-        if (path.startsWith('/')) return "$_baseUrl$path";
-        return "$_baseUrl/$path";
+      // On s'assure juste qu'il n'y a pas de double slash au début
+      if (path.startsWith('/')) return "$_baseUrl$path";
+      return "$_baseUrl/$path";
     }
 
     // Sinon, comportement standard
@@ -273,7 +358,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return "$_baseUrl/uploads/$folder/$path";
   }
 
- @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
@@ -322,7 +407,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.notifications_off_outlined, size: 60, color: Colors.grey[300]),
+                    Icon(
+                      Icons.notifications_off_outlined,
+                      size: 60,
+                      color: Colors.grey[300],
+                    ),
                     const SizedBox(height: 10),
                     Text(
                       "Aucune notification",
@@ -337,12 +426,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   vertical: 10,
                 ),
                 itemCount: _notifications.length + (_hasMore ? 1 : 0),
-                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   if (index == _notifications.length) {
                     return _isLoading
                         ? const Center(
-                            child: CircularProgressIndicator(color: AppColors.primary),
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
                           )
                         : TextButton(
                             onPressed: () {
@@ -352,15 +444,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             child: const Text("Voir plus"),
                           );
                   }
-                  
+
                   final notif = _notifications[index];
 
                   // --- NOUVEAU : Dismissible pour le Swipe ---
                   return Dismissible(
                     // La clé doit être unique pour chaque item
                     key: Key('notif_${notif.id}'),
-                    direction: DismissDirection.endToStart, // Swipe de droite à gauche uniquement
-                    
+                    direction: DismissDirection
+                        .endToStart, // Swipe de droite à gauche uniquement
                     // L'arrière-plan rouge quand on swipe
                     background: Container(
                       padding: const EdgeInsets.only(right: 20),
@@ -369,14 +461,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         color: Colors.red[100],
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.delete_outline, color: Colors.red, size: 30),
+                      child: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.red,
+                        size: 30,
+                      ),
                     ),
-                    
+
                     // L'action déclenchée
                     onDismissed: (direction) {
                       _deleteSingleNotification(notif.id, index);
                     },
-                    
+
                     // La carte normale
                     child: _buildNotificationCard(notif),
                   );
@@ -385,7 +481,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       ),
     );
   }
-
 
   Widget _buildNotificationCard(AppNotification notif) {
     bool hasThumbnail =
@@ -475,7 +570,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               fit: BoxFit.cover,
               onError: (exception, stackTrace) {
                 // Gestion d'erreur silencieuse si l'image ne charge pas
-              }
+              },
             ),
           ),
         );
@@ -532,6 +627,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         const Icon(Icons.play_circle_fill, color: Colors.orange, size: 26),
         Colors.orange.withOpacity(0.1),
       );
+    }
+
+    // CORRECTION : Logo PubCash pour les messages admin
+    if (notif.type == 'admin_message') {
+      return _buildAssetIcon('assets/images/logo.png');
     }
 
     return _buildIconContainer(
