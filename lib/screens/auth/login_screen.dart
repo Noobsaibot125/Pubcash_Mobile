@@ -354,13 +354,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 20),
 
                     SocialLoginButtons(
-                      onFacebookTap: () async {
+                      onAppleTap: () async {
                         try {
-                          await authService.loginWithFacebook();
+                          await authService.loginWithApple();
                           await NotificationService().forceRefreshToken();
                           if (mounted)
                             Navigator.of(context).pushReplacementNamed('/home');
                         } catch (e) {
+                          if (e.toString().contains('APPLE_CANCELED')) return;
+
                           // --- CORRECTION APPLIQUÉE ICI ---
                           final String readableMessage =
                               AuthService.getErrorMessage(e);

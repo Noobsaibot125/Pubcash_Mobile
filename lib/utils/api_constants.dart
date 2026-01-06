@@ -16,8 +16,8 @@ class ApiConstants {
   static const String _prodUrl = 'https://pub-cash.com/api';
   static const String _prodSocketUrl = 'https://pub-cash.com';
 
-  static const String _localUrl = 'http://192.168.1.6:5000/api';
-  static const String _localSocketUrl = 'http://192.168.1.6:5000';
+  static const String _localUrl = 'http://192.168.1.11:5000/api';
+  static const String _localSocketUrl = 'http://192.168.1.11:5000';
 
   // Logique intelligente
   static String get baseUrl {
@@ -48,7 +48,7 @@ class ApiConstants {
   static const String login = '/auth/utilisateur/login';
   static const String register = '/auth/utilisateur/register';
   static const String googleAuth = '/auth/google';
-  static const String facebookAuth = '/auth/facebook';
+  static const String appleAuth = '/auth/apple';
   static const String socialRegister = '/auth/social/register';
   static const String refreshToken = '/auth/refresh-token';
 

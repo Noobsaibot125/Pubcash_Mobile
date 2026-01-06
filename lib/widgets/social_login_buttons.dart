@@ -1,13 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 class SocialLoginButtons extends StatelessWidget {
-  final VoidCallback onFacebookTap;
+  final VoidCallback? onAppleTap;
   final VoidCallback onGoogleTap;
 
   const SocialLoginButtons({
     super.key,
-    required this.onFacebookTap,
+    this.onAppleTap,
     required this.onGoogleTap,
   });
 
@@ -16,22 +16,19 @@ class SocialLoginButtons extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        // Bouton Apple - uniquement sur iOS
+        if (Platform.isIOS && onAppleTap != null) ...[
+          _buildSocialButton(
+            color: Colors.black,
+            onTap: onAppleTap!,
+            isApple: true,
+          ),
+          const SizedBox(width: 20),
+        ],
+        // Bouton Google - toujours visible
         _buildSocialButton(
-          icon:
-              'assets/icons/facebook.svg', // Assurez-vous d'avoir cette icône ou utilisez Icon
-          color: const Color(0xFF3b5998),
-          onTap: onFacebookTap,
-          isIcon: false,
-          iconData: Icons.facebook,
-        ),
-        const SizedBox(width: 20),
-        _buildSocialButton(
-          icon: 'assets/icons/google.svg',
           color: Colors.white,
           onTap: onGoogleTap,
-          isIcon:
-              true, // Google logo is usually complex, better as SVG or Image, here using Icon for simplicity if SVG missing
-          iconData: null, // Placeholder if no SVG
           isGoogle: true,
         ),
       ],
@@ -39,11 +36,9 @@ class SocialLoginButtons extends StatelessWidget {
   }
 
   Widget _buildSocialButton({
-    required String icon,
     required Color color,
     required VoidCallback onTap,
-    bool isIcon = false,
-    IconData? iconData,
+    bool isApple = false,
     bool isGoogle = false,
   }) {
     return GestureDetector(
@@ -64,7 +59,9 @@ class SocialLoginButtons extends StatelessWidget {
           ],
         ),
         child: Center(
-          child: isGoogle
+          child: isApple
+              ? const Icon(Icons.apple, color: Colors.white, size: 35)
+              : isGoogle
               ? const Text(
                   'G',
                   style: TextStyle(
@@ -72,8 +69,8 @@ class SocialLoginButtons extends StatelessWidget {
                     fontSize: 30,
                     fontWeight: FontWeight.bold,
                   ),
-                ) // Placeholder simple pour Google
-              : Icon(iconData, color: Colors.white, size: 30),
+                )
+              : const SizedBox.shrink(),
         ),
       ),
     );

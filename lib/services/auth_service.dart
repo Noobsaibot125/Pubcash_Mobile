@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http_parser/http_parser.dart'; // Nécessaire pour MediaType
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:dio/dio.dart';
 import 'api_service.dart';
 import '../models/user.dart';
@@ -193,29 +193,33 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  Future<void> loginWithFacebook() async {
+  Future<void> loginWithApple() async {
     try {
       _setLoading(true);
 
-      // --- CORRECTION MAJEURE ICI ---
-      // Pareil pour Facebook, on déconnecte pour éviter qu'il reprenne
-      // le token précédent sans demander à l'utilisateur.
-      await FacebookAuth.instance.logOut();
-      // -----------------------------
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
 
-      final LoginResult result = await FacebookAuth.instance.login();
-      if (result.status == LoginStatus.success) {
-        final AccessToken accessToken = result.accessToken!;
-        final response = await _apiService.post(
-          ApiConstants.facebookAuth,
-          data: {'accessToken': accessToken.token},
-        );
-        await _handleAuthResponse(response.data);
-      } else if (result.status == LoginStatus.cancelled) {
-        throw Exception('FACEBOOK_CANCELED');
-      } else {
-        throw Exception('Erreur connexion Facebook: ${result.message}');
+      final response = await _apiService.post(
+        ApiConstants.appleAuth,
+        data: {
+          'identityToken': credential.identityToken,
+          'authorizationCode': credential.authorizationCode,
+          'givenName': credential.givenName,
+          'familyName': credential.familyName,
+          'email': credential.email,
+        },
+      );
+      await _handleAuthResponse(response.data);
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        throw Exception('APPLE_CANCELED');
       }
+      throw Exception('Erreur connexion Apple: ${e.message}');
     } on DioException catch (e) {
       if (e.response != null && e.response!.data is Map) {
         final data = e.response!.data as Map;
@@ -223,7 +227,7 @@ class AuthService with ChangeNotifier {
           throw Exception(data['message']);
         }
       }
-      throw Exception("Erreur de connexion avec Facebook.");
+      throw Exception("Erreur de connexion avec Apple.");
     } catch (e) {
       rethrow;
     } finally {
@@ -472,7 +476,7 @@ class AuthService with ChangeNotifier {
 
       try {
         await _googleSignIn.signOut();
-        await FacebookAuth.instance.logOut();
+        // Apple Sign-In doesn't require explicit logout
       } catch (e) {
         print("Erreur logout social: $e");
       }

@@ -629,9 +629,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                     // --- 3. MODIFICATION DES BOUTONS SOCIAUX ---
                     SocialLoginButtons(
-                      onFacebookTap: () async {
+                      onAppleTap: () async {
                         try {
-                          await authService.loginWithFacebook();
+                          await authService.loginWithApple();
                           await NotificationService().forceRefreshToken();
 
                           if (mounted) {
@@ -651,6 +651,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             );
                           }
                         } catch (e) {
+                          if (e.toString().contains('APPLE_CANCELED')) return;
+
                           // --- CORRECTION APPLIQUÉE ICI ---
                           final String readableMessage =
                               AuthService.getErrorMessage(e);
