@@ -14,7 +14,8 @@ class WheelGameScreen extends StatefulWidget {
 
 class _WheelGameScreenState extends State<WheelGameScreen> {
   final GameService _gameService = GameService();
-  final StreamController<int> _selected = StreamController<int>();
+  // FIX: Utiliser broadcast() pour éviter que le stream ne rejoue les anciennes valeurs
+  final StreamController<int> _selected = StreamController<int>.broadcast();
   bool _isSpinning = false;
   String? _resultMessage;
   int? _pointsWon;
@@ -48,7 +49,8 @@ class _WheelGameScreenState extends State<WheelGameScreen> {
       for (int i = 0; i < _wheelValues.length; i++) {
         if (_wheelValues[i] == points) possibleIndices.add(i);
       }
-      final targetIndex = possibleIndices[Random().nextInt(possibleIndices.length)];
+      final targetIndex =
+          possibleIndices[Random().nextInt(possibleIndices.length)];
 
       // 3. Lancer l'animation via le stream
       _selected.add(targetIndex);
@@ -56,23 +58,26 @@ class _WheelGameScreenState extends State<WheelGameScreen> {
       // Stocker les résultats
       _pointsWon = points;
       _resultMessage = message;
-
     } catch (e) {
       setState(() => _isSpinning = false);
       String errorMsg = e.toString().replaceAll('Exception:', '');
-      
+
       // Gestion du cas "Déjà joué" (403)
       if (errorMsg.contains("403") || errorMsg.toLowerCase().contains("déjà")) {
         _showStylishDialog(
           type: DialogType.info,
           title: "Oups !",
-          message: "Vous avez déjà tourné la roue aujourd'hui.\nRevenez demain !",
-          points: 0
+          message:
+              "Vous avez déjà tourné la roue aujourd'hui.\nRevenez demain !",
+          points: 0,
         );
       } else {
         // Erreur générique
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur: $errorMsg"), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text("Erreur: $errorMsg"),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -83,18 +88,18 @@ class _WheelGameScreenState extends State<WheelGameScreen> {
     if (_resultMessage != null && _pointsWon != null) {
       // Afficher le popup de résultat
       if (_pointsWon! > 0) {
-         _showStylishDialog(
-           type: DialogType.win, 
-           title: "Félicitations !", 
-           message: "Vous avez gagné $_pointsWon points !",
-           points: _pointsWon!
+        _showStylishDialog(
+          type: DialogType.win,
+          title: "Félicitations !",
+          message: "Vous avez gagné $_pointsWon points !",
+          points: _pointsWon!,
         );
       } else {
         _showStylishDialog(
-           type: DialogType.lose, 
-           title: "Dommage...", 
-           message: "Vous n'avez rien gagné cette fois.\nRevenez demain !",
-           points: 0
+          type: DialogType.lose,
+          title: "Dommage...",
+          message: "Vous n'avez rien gagné cette fois.\nRevenez demain !",
+          points: 0,
         );
       }
     }
@@ -151,7 +156,7 @@ class _WheelGameScreenState extends State<WheelGameScreen> {
                 child: Icon(icon, size: 50, color: mainColor),
               ),
               const SizedBox(height: 15),
-              
+
               // Titre
               Text(
                 title,
@@ -162,16 +167,16 @@ class _WheelGameScreenState extends State<WheelGameScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              
+
               // Message
               Text(
                 message,
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 16, color: Colors.black54),
               ),
-              
+
               const SizedBox(height: 25),
-              
+
               // Bouton
               SizedBox(
                 width: double.infinity,
@@ -186,7 +191,10 @@ class _WheelGameScreenState extends State<WheelGameScreen> {
                   onPressed: () {
                     Navigator.pop(ctx); // Ferme le dialog
                     if (type == DialogType.win || type == DialogType.lose) {
-                      Navigator.pop(context, true); // Ferme l'écran de jeu et rafraîchit
+                      Navigator.pop(
+                        context,
+                        true,
+                      ); // Ferme l'écran de jeu et rafraîchit
                     }
                   },
                   child: Text(
@@ -240,13 +248,15 @@ class _WheelGameScreenState extends State<WheelGameScreen> {
 
             SizedBox(
               height: 350,
-              // --- CORRECTION 1 : IgnorePointer empêche le tactile sur la roue ---
+              // IgnorePointer empêche le tactile sur la roue
               child: IgnorePointer(
                 ignoring: true, // La roue ne réagira plus aux doigts
                 child: FortuneWheel(
                   selected: _selected.stream,
                   onAnimationEnd: _onAnimationEnd,
                   physics: NoPanPhysics(), // Sécurité supplémentaire
+                  // FIX: Empêcher l'animation automatique au chargement de la page
+                  animateFirst: false,
                   items: [
                     for (var val in _wheelValues)
                       FortuneItem(
@@ -254,7 +264,7 @@ class _WheelGameScreenState extends State<WheelGameScreen> {
                           val == 0 ? "Perdu" : "$val Pts",
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            fontSize: 16, // Légèrement plus grand
+                            fontSize: 16,
                             color: val == 0 ? Colors.white : Colors.black,
                           ),
                         ),
@@ -262,10 +272,10 @@ class _WheelGameScreenState extends State<WheelGameScreen> {
                           color: val == 0
                               ? const Color(0xFFEF5350) // Rouge plus joli
                               : (val == 5
-                                  ? const Color(0xFFFFCA28) // Or
-                                  : (val == 2
-                                      ? const Color(0xFF42A5F5) // Bleu
-                                      : const Color(0xFF66BB6A))), // Vert
+                                    ? const Color(0xFFFFCA28) // Or
+                                    : (val == 2
+                                          ? const Color(0xFF42A5F5) // Bleu
+                                          : const Color(0xFF66BB6A))), // Vert
                           borderColor: Colors.white,
                           borderWidth: 2,
                         ),
