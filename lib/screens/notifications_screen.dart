@@ -6,6 +6,7 @@ import '../utils/api_constants.dart'; // 👈 IMPORT IMPORTANT
 import 'simple_video_player.dart';
 import 'gains/transaction_details_screen.dart';
 import 'messaging/chat_screen.dart';
+import 'main_navigation_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({Key? key}) : super(key: key);
@@ -287,7 +288,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       return;
     }
 
-    // 2. CAS NOUVELLE VIDÉO -> Accueil
+    // 2. CAS NOUVEAU JEU (Puzzle/Quiz) -> Onglet Jeux
+    if (notif.type == 'nouveau_jeu' || notif.type == 'jeu_gagne') {
+      // Naviguer vers l'écran principal avec l'onglet "Jeux" sélectionné (index 2)
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const MainNavigationScreen(initialIndex: 2),
+        ),
+        (route) => false,
+      );
+      return;
+    }
+
+    // 3. CAS NOUVELLE VIDÉO -> Accueil
     if (notif.type == 'nouvelle_video' || notif.type == 'nouvelle_promo') {
       Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
       return;
@@ -603,7 +617,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       return _buildAssetIcon(asset);
     }
 
-    if (notif.type == 'roue_fortune' || notif.type.contains('jeu')) {
+    // Icône pour la roue de fortune
+    if (notif.type == 'roue_fortune') {
       return Container(
         width: 48,
         height: 48,
@@ -613,6 +628,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
         padding: const EdgeInsets.all(6),
         child: Image.asset('assets/images/Wheel.png', fit: BoxFit.contain),
+      );
+    }
+
+    // Icône pour les puzzles et jeux (DIFFÉRENTE de la roue)
+    if (notif.type == 'nouveau_jeu' ||
+        notif.type == 'jeu_gagne' ||
+        notif.type.contains('puzzle')) {
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.purple.withOpacity(0.1),
+        ),
+        child: const Icon(
+          Icons.extension, // Icône puzzle native Flutter
+          color: Colors.purple,
+          size: 26,
+        ),
       );
     }
 

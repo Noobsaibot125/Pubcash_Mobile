@@ -10,7 +10,8 @@ import 'messaging/inbox_screen.dart';
 import 'profile_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
-  const MainNavigationScreen({super.key});
+  final int initialIndex;
+  const MainNavigationScreen({super.key, this.initialIndex = 0});
 
   @override
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
@@ -18,12 +19,12 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
-  
+
   // Badge pour les notifications générales (Vidéos/Système)
-  int _videoBadgeCount = 0; 
-  
+  int _videoBadgeCount = 0;
+
   // Badge pour les messages privés
-  int _messageBadgeCount = 0; 
+  int _messageBadgeCount = 0;
 
   final MessageService _messageService = MessageService();
   Timer? _messageTimer;
@@ -31,8 +32,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedIndex = widget.initialIndex;
     _fetchMessageCount();
-    
+
     // Polling toutes les 30 secondes pour mettre à jour le badge message
     _messageTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _fetchMessageCount();
@@ -63,7 +65,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     setState(() {
       _selectedIndex = index;
     });
-    
+
     // Si on clique sur l'onglet Messages, on rafraichit le compteur
     if (index == 3) {
       Future.delayed(const Duration(seconds: 2), _fetchMessageCount);
@@ -96,9 +98,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     ];
 
     // TA COULEUR ORANGE
-    final primaryOrange = const Color(0xFFFF6B35); 
+    final primaryOrange = const Color(0xFFFF6B35);
     // Couleur de fond de la pilule (orange très clair)
-    final indicatorColor = primaryOrange.withOpacity(0.2); 
+    final indicatorColor = primaryOrange.withOpacity(0.2);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -149,7 +151,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   isLabelVisible: _videoBadgeCount > 0,
                   backgroundColor: primaryOrange,
                   // MODIFICATION : Icone en orange
-                  child: Icon(Icons.home, color: primaryOrange), 
+                  child: Icon(Icons.home, color: primaryOrange),
                 ),
                 label: 'Accueil',
               ),
@@ -165,7 +167,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 // MODIFICATION : Icone en orange
                 selectedIcon: Icon(
                   Icons.account_balance_wallet,
-                  color: primaryOrange, 
+                  color: primaryOrange,
                 ),
                 label: 'Gain',
               ),
