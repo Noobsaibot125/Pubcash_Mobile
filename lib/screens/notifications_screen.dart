@@ -642,11 +642,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           shape: BoxShape.circle,
           color: Colors.purple.withOpacity(0.1),
         ),
-        child: const Icon(
-          Icons.extension, // Icône puzzle native Flutter
-          color: Colors.purple,
-          size: 26,
-        ),
+        padding: const EdgeInsets.all(8),
+        child: Image.asset('assets/images/Puzzle.png', fit: BoxFit.contain),
       );
     }
 
