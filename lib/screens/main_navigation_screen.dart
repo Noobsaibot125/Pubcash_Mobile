@@ -192,7 +192,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 selectedIcon: Badge(
                   label: Text('$_messageBadgeCount'),
                   isLabelVisible: _messageBadgeCount > 0,
-                  backgroundColor: Colors.red,
+                  // backgroundColor: Colors.red,
                   // MODIFICATION : Icone en orange
                   child: Icon(Icons.chat_bubble, color: primaryOrange),
                 ),
